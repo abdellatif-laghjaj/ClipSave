@@ -6,8 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,21 +20,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.data.model.DownloadStatus
+import com.abdellatif.clipsave.data.model.MediaType
 import java.util.Locale
 
 fun formatBytes(bytes: Long): String {
@@ -49,7 +58,6 @@ fun formatBytes(bytes: Long): String {
     return String.format(Locale.US, "%.1f %s", value, units[unit])
 }
 
-/** Small uppercase tracked label used to introduce sections. */
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -60,7 +68,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Flat pill chip. Selected state fills with ink; unselected is a hairline outline. */
+/** A flat filter control: filled when selected, quiet neutral surface otherwise. */
 @Composable
 fun MinimalChip(
     selected: Boolean,
@@ -69,13 +77,20 @@ fun MinimalChip(
     modifier: Modifier = Modifier
 ) {
     val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.secondary else Color.Transparent,
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.secondary
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
         animationSpec = tween(150),
         label = "chipContainer"
     )
     val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onSecondary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSecondary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
         animationSpec = tween(150),
         label = "chipContent"
     )
@@ -84,18 +99,16 @@ fun MinimalChip(
         modifier = modifier,
         shape = CircleShape,
         color = container,
-        contentColor = content,
-        border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        contentColor = content
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
         )
     }
 }
 
-/** Non-interactive status indicator: colored dot + quiet label. */
 @Composable
 fun StatusBadge(status: DownloadStatus) {
     val (label, color) = when (status) {
@@ -106,21 +119,12 @@ fun StatusBadge(status: DownloadStatus) {
         DownloadStatus.FAILED -> "Failed" to MaterialTheme.colorScheme.error
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(7.dp)
-                .background(color, CircleShape)
-        )
+        Box(Modifier.size(7.dp).background(color, CircleShape))
         Spacer(Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = color
-        )
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = color)
     }
 }
 
-/** Centered empty state used by list screens. */
 @Composable
 fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
     Column(
@@ -129,13 +133,15 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center
     ) {
         Box(
-            Modifier
-                .size(56.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+            Modifier.size(56.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text("↓", style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.Rounded.Download,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
         }
         Spacer(Modifier.height(16.dp))
         Text(title, style = MaterialTheme.typography.titleMedium)
@@ -157,19 +163,27 @@ fun DownloadRow(
     item: Download,
     onRetry: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onOpen: ((Download) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val playable = item.status == DownloadStatus.COMPLETED &&
+        item.mediaType == MediaType.VIDEO &&
+        !item.localUri.isNullOrBlank() &&
+        onOpen != null
+    val contentModifier = if (playable) {
+        Modifier.clickable(role = Role.Button) { onOpen?.invoke(item) }
+    } else {
+        Modifier
+    }
+
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 5.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 5.dp),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(contentModifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PlatformMonogram(item.platform.displayName)
+                PlatformIcon(item.platform)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -178,7 +192,7 @@ fun DownloadRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(3.dp))
                     val size = maxOf(item.totalBytes, item.bytesDownloaded)
                     val meta = buildString {
                         append(item.platform.displayName)
@@ -193,9 +207,37 @@ fun DownloadRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (item.status == DownloadStatus.COMPLETED) {
+                        Spacer(Modifier.height(3.dp))
+                        StatusBadge(item.status)
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                StatusBadge(item.status)
+                Spacer(Modifier.width(8.dp))
+                if (playable) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ) {
+                        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Rounded.PlayArrow,
+                                contentDescription = "Play ${
+                                    item.title.ifBlank { item.fileName.ifBlank { "video" } }
+                                }",
+                                modifier = Modifier.padding(start = 2.dp).size(23.dp)
+                            )
+                        }
+                    }
+                }
+                if (item.status == DownloadStatus.COMPLETED) {
+                    RowAction(
+                        label = "Remove",
+                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                    ) { onDelete(item.id) }
+                } else {
+                    StatusBadge(item.status)
+                }
             }
 
             AnimatedVisibility(
@@ -204,7 +246,7 @@ fun DownloadRow(
                 exit = shrinkVertically()
             ) {
                 val progress by animateFloatAsState(
-                    targetValue = (item.progress.coerceIn(0, 100)) / 100f,
+                    targetValue = item.progress.coerceIn(0, 100) / 100f,
                     animationSpec = tween(220),
                     label = "downloadProgress"
                 )
@@ -237,50 +279,45 @@ fun DownloadRow(
                 )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-            ) {
-                if (item.status == DownloadStatus.FAILED) {
-                    RowAction("Retry") { onRetry(item.id) }
+            if (item.status != DownloadStatus.COMPLETED) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (item.status == DownloadStatus.FAILED) {
+                        RowAction(
+                            label = "Retry",
+                            icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                        ) { onRetry(item.id) }
+                    }
+                    RowAction(
+                        label = "Remove",
+                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                    ) { onDelete(item.id) }
                 }
-                RowAction("Remove") { onDelete(item.id) }
             }
         }
     }
 }
 
 @Composable
-private fun RowAction(label: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun PlatformMonogram(name: String) {
-    Box(
-        Modifier
-            .size(40.dp)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = name.take(1).uppercase(Locale.US),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+private fun RowAction(
+    label: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+        Box(
+            Modifier.size(32.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { icon() }
+            }
+        }
     }
 }
