@@ -2,7 +2,6 @@ package com.abdellatif.clipsave.ui.settings
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -61,6 +60,7 @@ import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.SectionLabel
 import com.abdellatif.clipsave.ui.theme.accentSwatch
 import java.util.Locale
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -331,7 +331,7 @@ private fun PillButton(
 }
 
 private fun openUrl(context: Context, url: String) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
 }
 
 private fun openAppNotificationSettings(context: Context) {
@@ -347,7 +347,7 @@ private fun openAccessibilitySettings(context: Context) {
 private fun openOverlaySettings(context: Context) {
     val intent = Intent(
         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-        Uri.parse("package:${context.packageName}")
+        "package:${context.packageName}".toUri()
     )
     runCatching { context.startActivity(intent) }
 }
