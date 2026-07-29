@@ -167,25 +167,30 @@ private fun StatTile(
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(17.dp)
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                Text(
+                    value,
+                    style = MaterialTheme.typography.headlineSmall
                 )
             }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(Modifier.height(1.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
