@@ -88,13 +88,17 @@ class DownloadService : Service() {
                 updateForeground(item.title.ifBlank { platform.displayName }, p)
             }
             val type = if (format.isAudio) MediaType.AUDIO else guessType(res.file.extension)
-            val savedUri = FileSaver.saveFile(
-                this,
-                res.file,
-                res.title.ifBlank { defaultName(platform) },
-                type
-            )
-            res.file.parentFile?.deleteRecursively()
+            val savedUri = try {
+                MediaPayloadValidator.requireValid(res.file, type)
+                FileSaver.saveFile(
+                    this,
+                    res.file,
+                    res.title.ifBlank { defaultName(platform) },
+                    type
+                )
+            } finally {
+                res.file.parentFile?.deleteRecursively()
+            }
             finishSuccess(
                 item.copy(title = res.title, mediaType = type, fileName = res.file.name),
                 savedUri,
@@ -124,7 +128,8 @@ class DownloadService : Service() {
                 repo.upsert(item)
                 val temp = downloadToTemp(
                     media.downloadUrl,
-                    media.suggestedExtension ?: extOf(media.mediaType)
+                    media.suggestedExtension ?: extOf(media.mediaType),
+                    media.mediaType
                 ) { p ->
                     item = item.copy(progress = p); repo.upsert(item)
                     updateForeground(item.title.ifBlank { platform.displayName }, p)
@@ -148,31 +153,48 @@ class DownloadService : Service() {
         stopIfIdle()
     }
 
-    private fun downloadToTemp(url: String, ext: String, onProgress: (Int) -> Unit): File {
+    private fun downloadToTemp(
+        url: String,
+        ext: String,
+        mediaType: MediaType,
+        onProgress: (Int) -> Unit
+    ): File {
         val temp = File.createTempFile("dl_", ".$ext", cacheDir)
-        HttpClient.client.newCall(HttpClient.request(url, mobile = true)).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
-            val body = resp.body ?: throw IllegalStateException("Empty body")
-            val total = body.contentLength()
-            body.byteStream().use { input ->
-                temp.outputStream().use { output ->
-                    val buf = ByteArray(64 * 1024)
-                    var read: Int;
-                    var done = 0L;
-                    var lastPct = -1
-                    while (input.read(buf).also { read = it } != -1) {
-                        output.write(buf, 0, read); done += read
-                        if (total > 0) {
-                            val pct = ((done * 100) / total).toInt()
-                            if (pct != lastPct) {
-                                lastPct = pct; onProgress(pct)
+        return try {
+            HttpClient.client.newCall(HttpClient.request(url, mobile = true)).execute().use { resp ->
+                if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+                val body = resp.body ?: throw IllegalStateException("Empty body")
+                val total = body.contentLength()
+                body.byteStream().use { input ->
+                    temp.outputStream().use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var read: Int
+                        var done = 0L
+                        var lastPct = -1
+                        while (input.read(buf).also { read = it } != -1) {
+                            output.write(buf, 0, read)
+                            done += read
+                            if (total > 0) {
+                                val pct = ((done * 100) / total).toInt()
+                                if (pct != lastPct) {
+                                    lastPct = pct
+                                    onProgress(pct)
+                                }
                             }
                         }
                     }
                 }
+                MediaPayloadValidator.requireValid(
+                    temp,
+                    mediaType,
+                    body.contentType()?.toString()
+                )
             }
+            temp
+        } catch (error: Throwable) {
+            temp.delete()
+            throw error
         }
-        return temp
     }
 
     private fun finishSuccess(base: Download, uri: String, notifId: Int) {
