@@ -27,11 +27,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -259,6 +259,7 @@ fun DownloadRow(
                     }
                     RowAction(
                         label = "Remove",
+                        destructive = true,
                         icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
                     ) { onDelete(item.id) }
                 } else {
@@ -319,6 +320,7 @@ fun DownloadRow(
                     }
                     RowAction(
                         label = "Remove",
+                        destructive = true,
                         icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
                     ) { onDelete(item.id) }
                 }
@@ -330,20 +332,31 @@ fun DownloadRow(
 @Composable
 private fun RowAction(
     label: String,
+    destructive: Boolean = false,
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
-        Box(
-            Modifier.size(32.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            CompositionLocalProvider(
-                androidx.compose.material3.LocalContentColor provides
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            ) {
-                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { icon() }
-            }
+    val containerColor = if (destructive) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val contentColor = if (destructive) {
+        MaterialTheme.colorScheme.onError
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.padding(start = 8.dp).size(44.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        )
+    ) {
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            icon()
         }
     }
 }
