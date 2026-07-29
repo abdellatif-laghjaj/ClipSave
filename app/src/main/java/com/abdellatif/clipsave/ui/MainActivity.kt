@@ -115,7 +115,7 @@ fun ClipSaveRoot() {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
 
-    ClipSaveTheme(darkTheme = dark) {
+    ClipSaveTheme(darkTheme = dark, accentColor = settings.accentColor) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!settings.onboardingDone) {
                 OnboardingScreen(onDone = { vm.completeOnboarding() })

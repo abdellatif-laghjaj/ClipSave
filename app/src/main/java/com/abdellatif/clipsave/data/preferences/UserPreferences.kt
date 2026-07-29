@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class AccentColor { AMBER, BLUE, PURPLE, RED, GREEN, ORANGE }
 enum class AccessMode { NORMAL, ACCESSIBILITY, SHIZUKU, ROOT }
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "clipsave_prefs")
 
 data class Settings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val accentColor: AccentColor = AccentColor.AMBER,
     val accessMode: AccessMode = AccessMode.NORMAL,
     val onboardingDone: Boolean = false
 )
@@ -25,6 +27,7 @@ class UserPreferences(private val context: Context) {
 
     private object Keys {
         val THEME = stringPreferencesKey("theme_mode")
+        val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val ACCESS = stringPreferencesKey("access_mode")
         val ONBOARDING = booleanPreferencesKey("onboarding_done")
     }
@@ -34,6 +37,9 @@ class UserPreferences(private val context: Context) {
             themeMode = runCatching { ThemeMode.valueOf(p[Keys.THEME] ?: "SYSTEM") }.getOrDefault(
                 ThemeMode.SYSTEM
             ),
+            accentColor = runCatching {
+                AccentColor.valueOf(p[Keys.ACCENT_COLOR] ?: "AMBER")
+            }.getOrDefault(AccentColor.AMBER),
             accessMode = runCatching {
                 AccessMode.valueOf(
                     p[Keys.ACCESS] ?: "NORMAL"
@@ -45,6 +51,10 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setTheme(mode: ThemeMode) {
         context.dataStore.edit { it[Keys.THEME] = mode.name }
+    }
+
+    suspend fun setAccentColor(color: AccentColor) {
+        context.dataStore.edit { it[Keys.ACCENT_COLOR] = color.name }
     }
 
     suspend fun setAccessMode(mode: AccessMode) {

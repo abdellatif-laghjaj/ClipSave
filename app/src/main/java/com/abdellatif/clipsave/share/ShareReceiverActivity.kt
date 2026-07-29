@@ -23,16 +23,23 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.preferences.Settings
+import com.abdellatif.clipsave.data.preferences.ThemeMode
+import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.download.DownloadService
 import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
 
 class ShareReceiverActivity : ComponentActivity() {
+
+    private val userPreferences by lazy { UserPreferences(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +49,13 @@ class ShareReceiverActivity : ComponentActivity() {
             finish(); return
         }
         setContent {
-            ClipSaveTheme(darkTheme = isSystemInDarkTheme()) {
+            val settings by userPreferences.settings.collectAsState(initial = Settings())
+            val dark = when (settings.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            ClipSaveTheme(darkTheme = dark, accentColor = settings.accentColor) {
                 ConfirmDialog(
                     url = shared,
                     onDownload = { format ->

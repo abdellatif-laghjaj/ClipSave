@@ -4,7 +4,17 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -16,6 +26,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -29,10 +41,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abdellatif.clipsave.BuildConfig
+import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.YtDlpEngine
@@ -41,6 +59,7 @@ import com.abdellatif.clipsave.privileged.ShizukuHelper
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.SectionLabel
+import com.abdellatif.clipsave.ui.theme.accentSwatch
 import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -62,6 +81,11 @@ fun SettingsScreen(vm: AppViewModel) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
 
         SettingsGroup("Appearance") {
+            Text(
+                "Theme",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -72,6 +96,31 @@ fun SettingsScreen(vm: AppViewModel) {
                         onClick = { vm.setTheme(mode) },
                         label = mode.name.lowercase(Locale.US)
                             .replaceFirstChar { it.uppercase(Locale.US) }
+                    )
+                }
+            }
+            Text(
+                "Color",
+                modifier = Modifier.padding(top = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val darkSwatches = when (settings.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AccentColor.entries.forEach { color ->
+                    AccentColorOption(
+                        color = color,
+                        darkTheme = darkSwatches,
+                        selected = settings.accentColor == color,
+                        onClick = { vm.setAccentColor(color) }
                     )
                 }
             }
@@ -160,6 +209,72 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
         Spacer(Modifier.height(20.dp))
+    }
+}
+
+@Composable
+private fun AccentColorOption(
+    color: AccentColor,
+    darkTheme: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "accentPressScale"
+    )
+    val outerColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.outline
+        },
+        animationSpec = tween(durationMillis = 160),
+        label = "accentOuterColor"
+    )
+    val outerWidth by animateDpAsState(
+        targetValue = if (selected) 2.dp else 1.dp,
+        animationSpec = tween(durationMillis = 160),
+        label = "accentOuterWidth"
+    )
+    val label = color.name.lowercase(Locale.US)
+        .replaceFirstChar { it.uppercase(Locale.US) }
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .selectable(
+                selected = selected,
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.RadioButton,
+                onClick = onClick
+            )
+            .border(outerWidth, outerColor, CircleShape)
+            .padding(4.dp)
+            .semantics { contentDescription = "$label color" },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .border(
+                    width = 2.dp,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = CircleShape
+                )
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(accentSwatch(color, darkTheme))
+        )
     }
 }
 
