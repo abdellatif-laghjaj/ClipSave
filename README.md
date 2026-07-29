@@ -3,6 +3,9 @@
 # ClipSave
 
 ![GitHub Downloads](https://img.shields.io/github/downloads/abdellatif-laghjaj/android-all-in-one-video-downloader/total.svg)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-black)
 
 **Free, open-source media downloader for Android.** Grab images, video, and audio from
 1000+ websites — YouTube, Instagram, TikTok, X/Twitter, Reddit, Facebook, Pinterest,
@@ -13,16 +16,65 @@ No ads. No telemetry. No tracking. MIT licensed.
 
 ---
 
+## App preview
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/onboarding.png" alt="ClipSave onboarding screen" width="260"><br>
+      <strong>Onboarding</strong><br>
+      <sub>A clear introduction to the download flow.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/home.png" alt="ClipSave home screen" width="260"><br>
+      <strong>Home</strong><br>
+      <sub>At-a-glance activity and recent downloads.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/downloads.png" alt="ClipSave downloads manager" width="260"><br>
+      <strong>Downloads</strong><br>
+      <sub>Search, filter, retry, play, and manage files.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/new-download.png" alt="ClipSave new download screen" width="260"><br>
+      <strong>New download</strong><br>
+      <sub>Paste a link and choose video or audio quality.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/video-player.png" alt="ClipSave in-app video player" width="260"><br>
+      <strong>Video player</strong><br>
+      <sub>Clean playback with seeking and skip controls.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/settings.png" alt="ClipSave appearance and app settings" width="260"><br>
+      <strong>Settings</strong><br>
+      <sub>Theme, accent color, engine, and access controls.</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/share-dialog.png" alt="Share a link directly to ClipSave" width="280"><br>
+  <strong>Share from any app</strong><br>
+  <sub>Send a link to ClipSave and choose video or audio without retyping it.</sub>
+</p>
+
+---
+
 ## Features
 
 - **1000+ sites** via a bundled **yt-dlp** engine (with **ffmpeg** merging + **aria2c**).
-- **Metadata-scraper fallback** for pure image posts (Open Graph / Twitter cards).
+- **Automatic platform detection** with recognizable icons for popular services.
+- **Metadata-scraper fallback** for supported pure image posts.
 - **Reddit** handled natively through the public JSON API.
 - **Share to ClipSave** — share any link from any app to download it.
 - **One-tap floating button** (Accessibility) while browsing Instagram / TikTok / X.
 - **Audio-only** extraction (m4a) for any supported video.
 - **Foreground service** downloads with live progress notifications.
-- **Material 3** UI with light / dark / system themes (instant switching).
+- **In-app video player** with seeking and 10-second skip controls.
+- **Material 3** UI with light / dark / system modes and six saved accent colors.
 - **Downloads manager**: search, filter, retry failed, delete, clear.
 - Saves through **MediaStore** — no storage permission needed on Android 10+.
 - **Shizuku / root status** surfaced in Settings (downloads need neither).
