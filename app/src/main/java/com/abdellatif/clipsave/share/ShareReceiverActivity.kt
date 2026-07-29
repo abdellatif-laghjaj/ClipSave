@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
@@ -26,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.download.DownloadService
+import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
 
 class ShareReceiverActivity : ComponentActivity() {
@@ -64,7 +68,13 @@ private fun ConfirmDialog(url: String, onDownload: (DownloadFormat) -> Unit, onC
     val platform = Platform.fromUrl(url)
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Download from ${platform.displayName}?") },
+        title = {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                PlatformIcon(platform, containerSize = 36.dp, iconSize = 18.dp)
+                Spacer(Modifier.size(10.dp))
+                Text("Download from ${platform.displayName}?")
+            }
+        },
         text = { Text(url, maxLines = 3, overflow = TextOverflow.Ellipsis) },
         confirmButton = {
             Button(onClick = { onDownload(DownloadFormat.BEST) }) {
