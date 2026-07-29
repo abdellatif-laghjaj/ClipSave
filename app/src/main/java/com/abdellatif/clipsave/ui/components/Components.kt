@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
+import com.abdellatif.clipsave.data.model.Platform
 import java.util.Locale
 
 fun formatBytes(bytes: Long): String {
@@ -158,6 +159,17 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
 private val Download.isBusy: Boolean
     get() = status == DownloadStatus.DOWNLOADING || status == DownloadStatus.EXTRACTING
 
+/**
+ * Older builds saved X's Open Graph tweet-card preview when yt-dlp failed.
+ * Those files were named from the fallback's dl_* temp file; genuine yt-dlp
+ * image downloads retain their extracted filename and should not be retried.
+ */
+private val Download.isLegacyTwitterPreview: Boolean
+    get() = status == DownloadStatus.COMPLETED &&
+        platform == Platform.TWITTER &&
+        mediaType == MediaType.IMAGE &&
+        fileName.startsWith("dl_")
+
 @Composable
 fun DownloadRow(
     item: Download,
@@ -209,7 +221,15 @@ fun DownloadRow(
                     )
                     if (item.status == DownloadStatus.COMPLETED) {
                         Spacer(Modifier.height(3.dp))
-                        StatusBadge(item.status)
+                        if (item.isLegacyTwitterPreview) {
+                            Text(
+                                text = "Preview only · retry",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            StatusBadge(item.status)
+                        }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -231,6 +251,12 @@ fun DownloadRow(
                     }
                 }
                 if (item.status == DownloadStatus.COMPLETED) {
+                    if (item.isLegacyTwitterPreview) {
+                        RowAction(
+                            label = "Retry media extraction",
+                            icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                        ) { onRetry(item.id) }
+                    }
                     RowAction(
                         label = "Remove",
                         icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
