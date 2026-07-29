@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.abdellatif.clipsave.ClipSaveApp
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.MediaType
+import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
 import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
@@ -55,6 +56,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun clearAll() = repo.clearAll()
 
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { prefs.setTheme(mode) }
+    fun setAccentColor(color: AccentColor) = viewModelScope.launch { prefs.setAccentColor(color) }
     fun setAccessMode(mode: AccessMode) = viewModelScope.launch { prefs.setAccessMode(mode) }
     fun completeOnboarding() = viewModelScope.launch { prefs.setOnboardingDone(true) }
 

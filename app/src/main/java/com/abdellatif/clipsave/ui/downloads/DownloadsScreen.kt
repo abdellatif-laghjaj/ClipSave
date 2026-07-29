@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abdellatif.clipsave.data.model.DownloadStatus
+import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.components.DownloadRow
 import com.abdellatif.clipsave.ui.components.EmptyState
@@ -42,7 +43,7 @@ import com.abdellatif.clipsave.ui.components.MinimalChip
 import java.util.Locale
 
 @Composable
-fun DownloadsScreen(vm: AppViewModel) {
+fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf<DownloadStatus?>(null) }
@@ -128,7 +129,9 @@ fun DownloadsScreen(vm: AppViewModel) {
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(filtered, key = { it.id }) { DownloadRow(it, vm::retry, vm::delete) }
+                items(filtered, key = { it.id }) {
+                    DownloadRow(it, vm::retry, vm::delete, onOpen)
+                }
             }
         }
     }

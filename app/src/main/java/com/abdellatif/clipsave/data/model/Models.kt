@@ -60,9 +60,21 @@ enum class Platform(val displayName: String, val hosts: List<String>) {
     GENERIC("Web", emptyList());
 
     companion object {
-        fun fromUrl(url: String): Platform {
+        private val urlInText = Regex("""(?:https?://)?(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?:/[^\s]*)?""")
+
+        /**
+         * Detects the source from a full URL, a bare domain, or text containing a shared link.
+         * Unknown hosts deliberately resolve to [GENERIC] so yt-dlp can still handle them.
+         */
+        fun fromUrl(input: String): Platform {
+            val candidate = urlInText.find(input.trim())?.value ?: return GENERIC
+            val normalized = if ("://" in candidate) candidate else "https://$candidate"
             val host = runCatching {
-                java.net.URI(url.trim()).host?.removePrefix("www.")?.lowercase()
+                java.net.URI(normalized)
+                    .host
+                    ?.trimEnd('.')
+                    ?.removePrefix("www.")
+                    ?.lowercase()
             }.getOrNull() ?: return GENERIC
             return entries.firstOrNull { p -> p.hosts.any { host == it || host.endsWith(".$it") } }
                 ?: GENERIC

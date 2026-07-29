@@ -45,7 +45,7 @@ object FileSaver {
         mediaType: MediaType
     ): String {
         val ext = source.extension.ifBlank { defaultExt(mediaType) }
-        val safeName = sanitize(if (displayName.contains('.')) displayName else "$displayName.$ext")
+        val safeName = safeDisplayName(displayName, ext)
         val mime = mimeFor(mediaType, ext)
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -110,7 +110,20 @@ object FileSaver {
         MediaType.VIDEO -> "mp4"; MediaType.AUDIO -> "m4a"; MediaType.IMAGE -> "jpg"; MediaType.UNKNOWN -> "bin"
     }
 
-    private fun sanitize(name: String): String =
-        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(180)
+    internal fun safeDisplayName(displayName: String, ext: String): String {
+        val suffix = ext.trim().removePrefix(".")
+        val base = if (suffix.isNotBlank() && displayName.endsWith(".$suffix", ignoreCase = true)) {
+            displayName.dropLast(suffix.length + 1)
+        } else {
+            displayName
+        }
+        val cleanBase = base
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .trim()
+            .trimEnd('.', ' ')
             .ifBlank { "clipsave_${System.currentTimeMillis()}" }
+        if (suffix.isBlank()) return cleanBase.take(180)
+        val maxBaseLength = (180 - suffix.length - 1).coerceAtLeast(1)
+        return "${cleanBase.take(maxBaseLength).trimEnd('.', ' ')}.$suffix"
+    }
 }

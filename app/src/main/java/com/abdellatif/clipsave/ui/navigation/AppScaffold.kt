@@ -28,17 +28,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.downloads.DownloadsScreen
 import com.abdellatif.clipsave.ui.home.HomeScreen
 import com.abdellatif.clipsave.ui.paste.PasteUrlScreen
+import com.abdellatif.clipsave.ui.player.VideoPlayerScreen
 import com.abdellatif.clipsave.ui.settings.SettingsScreen
 
 private enum class Tab(val route: String, val label: String, val icon: Int) {
@@ -51,6 +55,8 @@ private enum class Tab(val route: String, val label: String, val icon: Int) {
 @Composable
 fun AppScaffold(vm: AppViewModel) {
     val navController = rememberNavController()
+    val backStack by navController.currentBackStackEntryAsState()
+    val current = backStack?.destination
 
     // All top-level moves (tabs AND in-screen shortcuts like the Home FAB) must use this
     // single pattern. A plain navigate() would push a duplicate destination; popping it
@@ -64,17 +70,23 @@ fun AppScaffold(vm: AppViewModel) {
         }
     }
 
+    fun openPlayer(downloadId: String) {
+        navController.navigate("player/${android.net.Uri.encode(downloadId)}") {
+            launchSingleTop = true
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            val backStack by navController.currentBackStackEntryAsState()
-            val current = backStack?.destination
-            MinimalNavBar(
-                selectedRoute = Tab.entries.firstOrNull { tab ->
-                    current?.hierarchy?.any { it.route == tab.route } == true
-                }?.route,
-                onSelect = ::navigateToTab
-            )
+            if (current?.route in Tab.entries.map { it.route }) {
+                MinimalNavBar(
+                    selectedRoute = Tab.entries.firstOrNull { tab ->
+                        current?.hierarchy?.any { it.route == tab.route } == true
+                    }?.route,
+                    onSelect = ::navigateToTab
+                )
+            }
         }
     ) { padding ->
         NavHost(
@@ -87,11 +99,28 @@ fun AppScaffold(vm: AppViewModel) {
             popExitTransition = { fadeOut(tween(180)) }
         ) {
             composable(Tab.HOME.route) {
-                HomeScreen(vm, onGoToPaste = { navigateToTab(Tab.PASTE) })
+                HomeScreen(
+                    vm,
+                    onGoToPaste = { navigateToTab(Tab.PASTE) },
+                    onOpen = { openPlayer(it.id) }
+                )
             }
-            composable(Tab.DOWNLOADS.route) { DownloadsScreen(vm) }
+            composable(Tab.DOWNLOADS.route) {
+                DownloadsScreen(vm, onOpen = { openPlayer(it.id) })
+            }
             composable(Tab.PASTE.route) { PasteUrlScreen(vm) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm) }
+            composable(
+                route = "player/{downloadId}",
+                arguments = listOf(navArgument("downloadId") { type = NavType.StringType })
+            ) { entry ->
+                val downloads by vm.downloads.collectAsStateWithLifecycle()
+                val id = entry.arguments?.getString("downloadId")
+                val item = downloads.firstOrNull { it.id == id }
+                if (item != null) {
+                    VideoPlayerScreen(item, onBack = navController::navigateUp)
+                }
+            }
         }
     }
 }

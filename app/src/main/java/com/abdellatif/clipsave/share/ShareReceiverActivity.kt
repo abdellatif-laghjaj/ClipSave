@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
@@ -20,15 +23,23 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.preferences.Settings
+import com.abdellatif.clipsave.data.preferences.ThemeMode
+import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.download.DownloadService
+import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
 
 class ShareReceiverActivity : ComponentActivity() {
+
+    private val userPreferences by lazy { UserPreferences(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +49,13 @@ class ShareReceiverActivity : ComponentActivity() {
             finish(); return
         }
         setContent {
-            ClipSaveTheme(darkTheme = isSystemInDarkTheme()) {
+            val settings by userPreferences.settings.collectAsState(initial = Settings())
+            val dark = when (settings.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            ClipSaveTheme(darkTheme = dark, accentColor = settings.accentColor) {
                 ConfirmDialog(
                     url = shared,
                     onDownload = { format ->
@@ -64,7 +81,13 @@ private fun ConfirmDialog(url: String, onDownload: (DownloadFormat) -> Unit, onC
     val platform = Platform.fromUrl(url)
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Download from ${platform.displayName}?") },
+        title = {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                PlatformIcon(platform, containerSize = 36.dp, iconSize = 18.dp)
+                Spacer(Modifier.size(10.dp))
+                Text("Download from ${platform.displayName}?")
+            }
+        },
         text = { Text(url, maxLines = 3, overflow = TextOverflow.Ellipsis) },
         confirmButton = {
             Button(onClick = { onDownload(DownloadFormat.BEST) }) {

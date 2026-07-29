@@ -3,20 +3,50 @@ package com.abdellatif.clipsave.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.abdellatif.clipsave.data.preferences.AccentColor
 
-/**
- * "Ink & paper" minimal design language: warm neutral surfaces, hairline outlines,
- * a single amber brand accent, and ink-colored primary actions. Deliberately flat —
- * no tonal elevation, no dynamic color.
- */
-private val Amber = Color(0xFFFFB703)
-private val AmberDeep = Color(0xFFEBA400)
-private val OnAmber = Color(0xFF201500)
+/** Warm neutral surfaces with a user-selectable accent and deliberately flat styling. */
+private data class AccentPalette(
+    val light: Color,
+    val dark: Color,
+    val onLight: Color = Color.White,
+    val onDark: Color = Color(0xFF101014)
+)
+
+private val AccentPalettes = mapOf(
+    AccentColor.AMBER to AccentPalette(
+        light = Color(0xFFEBA400),
+        dark = Color(0xFFFFB703),
+        onLight = Color(0xFF201500),
+        onDark = Color(0xFF201500)
+    ),
+    AccentColor.BLUE to AccentPalette(
+        light = Color(0xFF2F6BDE),
+        dark = Color(0xFF7AA7FF)
+    ),
+    AccentColor.PURPLE to AccentPalette(
+        light = Color(0xFF7654D8),
+        dark = Color(0xFFB8A4FF)
+    ),
+    AccentColor.RED to AccentPalette(
+        light = Color(0xFFC84B4B),
+        dark = Color(0xFFFF8C86)
+    ),
+    AccentColor.GREEN to AccentPalette(
+        light = Color(0xFF2F7D5C),
+        dark = Color(0xFF69D6A6)
+    ),
+    AccentColor.ORANGE to AccentPalette(
+        light = Color(0xFFD45F2A),
+        dark = Color(0xFFFF9B6A)
+    )
+)
 
 // Light: warm paper
 private val PaperLight = Color(0xFFFAF9F7)
@@ -32,17 +62,11 @@ private val MutedDark = Color(0xFF908D87)
 private val TileDark = Color(0xFF1B1A1E)
 private val HairlineDark = Color(0xFF27262B)
 
-private val LightColors = lightColorScheme(
-    primary = AmberDeep,
-    onPrimary = OnAmber,
-    primaryContainer = Amber.copy(alpha = 0.16f),
-    onPrimaryContainer = Color(0xFF6B4A00),
+private val NeutralLightColors = lightColorScheme(
     secondary = InkLight,
     onSecondary = PaperLight,
     secondaryContainer = TileLight,
     onSecondaryContainer = InkLight,
-    tertiary = AmberDeep,
-    onTertiary = OnAmber,
     background = PaperLight,
     onBackground = InkLight,
     surface = PaperLight,
@@ -58,17 +82,11 @@ private val LightColors = lightColorScheme(
     onError = Color.White
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Amber,
-    onPrimary = OnAmber,
-    primaryContainer = Amber.copy(alpha = 0.14f),
-    onPrimaryContainer = Color(0xFFFFD262),
+private val NeutralDarkColors = darkColorScheme(
     secondary = InkDark,
     onSecondary = PaperDark,
     secondaryContainer = TileDark,
     onSecondaryContainer = InkDark,
-    tertiary = Amber,
-    onTertiary = OnAmber,
     background = PaperDark,
     onBackground = InkDark,
     surface = PaperDark,
@@ -92,13 +110,44 @@ private val ClipSaveShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp)
 )
 
+internal fun accentSwatch(accentColor: AccentColor, darkTheme: Boolean): Color {
+    val palette = AccentPalettes.getValue(accentColor)
+    return if (darkTheme) palette.dark else palette.light
+}
+
+internal fun clipSaveColorScheme(
+    darkTheme: Boolean,
+    accentColor: AccentColor
+): ColorScheme {
+    val base = if (darkTheme) NeutralDarkColors else NeutralLightColors
+    val palette = AccentPalettes.getValue(accentColor)
+    val accent = if (darkTheme) palette.dark else palette.light
+    val onAccent = if (darkTheme) palette.onDark else palette.onLight
+    val containerAlpha = if (darkTheme) 0.18f else 0.14f
+    return base.copy(
+        primary = accent,
+        onPrimary = onAccent,
+        primaryContainer = accent.copy(alpha = containerAlpha),
+        onPrimaryContainer = accent,
+        secondary = accent,
+        onSecondary = onAccent,
+        secondaryContainer = accent.copy(alpha = containerAlpha),
+        onSecondaryContainer = accent,
+        tertiary = accent,
+        onTertiary = onAccent,
+        tertiaryContainer = accent.copy(alpha = containerAlpha),
+        onTertiaryContainer = accent
+    )
+}
+
 @Composable
 fun ClipSaveTheme(
     darkTheme: Boolean,
+    accentColor: AccentColor = AccentColor.AMBER,
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = clipSaveColorScheme(darkTheme, accentColor),
         typography = ClipSaveTypography,
         shapes = ClipSaveShapes,
         content = content

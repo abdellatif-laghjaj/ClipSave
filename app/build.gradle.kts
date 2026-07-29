@@ -17,8 +17,9 @@ android {
         versionName = "2.0.2"
         vectorDrawables { useSupportLibrary = true }
         ndk {
-            // yt-dlp ships native python/ffmpeg/aria2c binaries; cover real-world phones.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            // yt-dlp ships native Python/ffmpeg/aria2c binaries. Keep x86 builds so
+            // emulators run the engine natively instead of translating an ARM Python binary.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
     }
 
@@ -100,6 +101,8 @@ dependencies {
 
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)

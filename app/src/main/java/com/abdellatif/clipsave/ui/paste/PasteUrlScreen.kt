@@ -45,6 +45,7 @@ import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.components.MinimalChip
+import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.components.SectionLabel
 import kotlinx.coroutines.delay
 
@@ -116,18 +117,21 @@ fun PasteUrlScreen(vm: AppViewModel) {
             }
         )
         AnimatedVisibility(visible = platform != null, enter = fadeIn(), exit = fadeOut()) {
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ) {
-                    Text(
-                        platform?.displayName.orEmpty(),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                    )
-                }
+            Row(
+                Modifier.padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PlatformIcon(
+                    platform = platform ?: Platform.GENERIC,
+                    containerSize = 32.dp,
+                    iconSize = 17.dp
+                )
+                Text(
+                    platform?.displayName.orEmpty(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
