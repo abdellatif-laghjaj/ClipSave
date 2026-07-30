@@ -154,10 +154,10 @@ ClipSave is based on the original [MediaGrab project](https://github.com/omersus
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=abdellatif-laghjaj%2Fandroid-all-in-one-video-downloader&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=abdellatif-laghjaj%2FClipSave&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=abdellatif-laghjaj/android-all-in-one-video-downloader&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=abdellatif-laghjaj/android-all-in-one-video-downloader&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=abdellatif-laghjaj/android-all-in-one-video-downloader&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=abdellatif-laghjaj/ClipSave&type=date&theme=dark&legend=top-left&sealed_token=9lg5BUXsdT8tTZy5BJHNNqXtQu7b8dFPvOegIWUdnSjX0fqH9sNdXHflpilSim7z6Ss3_nVmvWMjTfQx6pkujXB8jGUfNjhoKe08TuNh6SF3QGueIgdmIQ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=abdellatif-laghjaj/ClipSave&type=date&legend=top-left&sealed_token=9lg5BUXsdT8tTZy5BJHNNqXtQu7b8dFPvOegIWUdnSjX0fqH9sNdXHflpilSim7z6Ss3_nVmvWMjTfQx6pkujXB8jGUfNjhoKe08TuNh6SF3QGueIgdmIQ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=abdellatif-laghjaj/ClipSave&type=date&legend=top-left&sealed_token=9lg5BUXsdT8tTZy5BJHNNqXtQu7b8dFPvOegIWUdnSjX0fqH9sNdXHflpilSim7z6Ss3_nVmvWMjTfQx6pkujXB8jGUfNjhoKe08TuNh6SF3QGueIgdmIQ" />
  </picture>
 </a>
