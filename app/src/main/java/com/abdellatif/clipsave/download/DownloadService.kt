@@ -111,6 +111,20 @@ class DownloadService : Service() {
             return
         }
 
+        // onStartCommand is serialized on the main thread, so this check and the upsert below
+        // form one queue-boundary decision even when several share/paste intents arrive together.
+        val duplicate = repo.downloads.value.firstOrNull {
+            it.id != request.id && it.matchesActiveRequest(request.url, request.format)
+        }
+        if (duplicate != null) {
+            updateForeground(
+                duplicate.title.ifBlank { "Already in download queue" },
+                duplicate.progress,
+                duplicate.id
+            )
+            return
+        }
+
         pauseRequests.remove(request.id)
         removedIds.remove(request.id)
         val platform = Platform.fromUrl(request.url)
@@ -315,7 +329,7 @@ class DownloadService : Service() {
                 true
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 ytError = error.message
                 android.util.Log.w("DownloadService", "yt-dlp path failed: ${error.message}")
                 false
@@ -377,7 +391,7 @@ class DownloadService : Service() {
                         YtDlpEngine.cleanup(this, request.id)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
-                    } catch (error: Throwable) {
+                    } catch (error: Exception) {
                         val message = buildString {
                             append(error.message ?: "Download failed.")
                             if (ytError != null) append(" (engine: $ytError)")
@@ -460,7 +474,7 @@ class DownloadService : Service() {
                 )
             }
             temp
-        } catch (error: Throwable) {
+        } catch (error: Exception) {
             temp.delete()
             throw error
         } finally {
