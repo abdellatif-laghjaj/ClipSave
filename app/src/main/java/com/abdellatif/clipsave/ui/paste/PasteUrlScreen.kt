@@ -16,23 +16,37 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,13 +54,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.abdellatif.clipsave.R
+import com.abdellatif.clipsave.data.model.CollectionUrlDetector
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.model.PlaylistInspectionState
+import com.abdellatif.clipsave.data.model.PlaylistItem
+import com.abdellatif.clipsave.data.model.PlaylistPreview
 import com.abdellatif.clipsave.data.model.UrlInputParser
 import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.AppViewModel
@@ -54,11 +77,14 @@ import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.components.SectionLabel
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PasteUrlScreen(vm: AppViewModel) {
     val context = LocalContext.current
+    val playlistInspection by vm.playlistInspection.collectAsStateWithLifecycle()
+    val pendingDownloadUrl by vm.pendingDownloadUrl.collectAsStateWithLifecycle()
     var url by remember { mutableStateOf("") }
     var format by remember { mutableStateOf(DownloadFormat.BEST) }
     var confirmation by remember { mutableStateOf("") }
@@ -68,6 +94,9 @@ fun PasteUrlScreen(vm: AppViewModel) {
     val parsed = remember(url) { UrlInputParser.parse(url) }
     val platform = remember(parsed.urls) {
         parsed.urls.singleOrNull()?.let(Platform::fromUrl)
+    }
+    val collectionDetected = remember(parsed.urls) {
+        parsed.urls.singleOrNull()?.let(CollectionUrlDetector::isLikelyCollection) == true
     }
 
     fun queueDownloads(urls: List<String>, selectedFormat: DownloadFormat) {
@@ -98,6 +127,25 @@ fun PasteUrlScreen(vm: AppViewModel) {
             delay(4000)
             confirmation = ""
         }
+    }
+
+    LaunchedEffect(playlistInspection) {
+        val state = playlistInspection
+        if (state is PlaylistInspectionState.Error) {
+            confirmation = state.message
+            vm.dismissPlaylistInspection()
+        }
+    }
+
+    LaunchedEffect(pendingDownloadUrl) {
+        pendingDownloadUrl?.let { incomingUrl ->
+            url = incomingUrl
+            vm.consumeNewDownload(incomingUrl)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose(vm::dismissPlaylistInspection)
     }
 
     Column(
@@ -177,6 +225,9 @@ fun PasteUrlScreen(vm: AppViewModel) {
                 }
                 Text(
                     when {
+                        collectionDetected && platform != null ->
+                            "${platform.displayName} · playlist link"
+                        collectionDetected -> "Playlist or collection link"
                         platform != null -> platform.displayName
                         parsed.omittedCount > 0 ->
                             "${parsed.urls.size} links ready · ${parsed.omittedCount} omitted"
@@ -217,16 +268,27 @@ fun PasteUrlScreen(vm: AppViewModel) {
         }
 
         Spacer(Modifier.height(28.dp))
+        val isInspecting = playlistInspection is PlaylistInspectionState.Loading
         DownloadButton(
-            enabled = parsed.urls.isNotEmpty(),
-            label = if (parsed.urls.size <= 1) "Download" else "Queue ${parsed.urls.size} downloads",
+            enabled = parsed.urls.isNotEmpty() && !isInspecting,
+            loading = isInspecting,
+            label = when {
+                isInspecting -> "Reading playlist"
+                collectionDetected -> "Review playlist"
+                parsed.urls.size <= 1 -> "Download"
+                else -> "Queue ${parsed.urls.size} downloads"
+            },
             onClick = {
-                val request = parsed.urls to format
-                if (FileSaver.needsLegacyStoragePermission(context)) {
-                    pendingDownload = request
-                    storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                if (collectionDetected) {
+                    vm.inspectPlaylist(parsed.urls.single())
                 } else {
-                    queueDownloads(request.first, request.second)
+                    val request = parsed.urls to format
+                    if (FileSaver.needsLegacyStoragePermission(context)) {
+                        pendingDownload = request
+                        storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    } else {
+                        queueDownloads(request.first, request.second)
+                    }
                 }
             }
         )
@@ -249,10 +311,228 @@ fun PasteUrlScreen(vm: AppViewModel) {
         }
         Spacer(Modifier.height(24.dp))
     }
+
+    val ready = playlistInspection as? PlaylistInspectionState.Ready
+    if (ready != null) {
+        PlaylistSelectionSheet(
+            preview = ready.preview,
+            onDismiss = vm::dismissPlaylistInspection,
+            onQueue = { selectedUrls ->
+                vm.dismissPlaylistInspection()
+                val request = selectedUrls to format
+                if (FileSaver.needsLegacyStoragePermission(context)) {
+                    pendingDownload = request
+                    storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                } else {
+                    queueDownloads(request.first, request.second)
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaylistSelectionSheet(
+    preview: PlaylistPreview,
+    onDismiss: () -> Unit,
+    onQueue: (List<String>) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedKeys by remember(preview) {
+        mutableStateOf(emptySet<String>())
+    }
+    val selectedItems = preview.items.filter { it.key in selectedKeys }
+    val allSelected = selectedItems.size == preview.items.size
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.88f)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            Text(
+                preview.title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!preview.uploader.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    preview.uploader,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${selectedItems.size} of ${preview.items.size} selected",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = {
+                        selectedKeys = if (allSelected) {
+                            emptySet()
+                        } else {
+                            preview.items.map(PlaylistItem::key).toSet()
+                        }
+                    }
+                ) {
+                    Text(if (allSelected) "Clear all" else "Select all")
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .heightIn(max = 430.dp)
+            ) {
+                items(preview.items, key = PlaylistItem::key) { item ->
+                    PlaylistSelectionRow(
+                        item = item,
+                        selected = item.key in selectedKeys,
+                        onSelectedChange = { selected ->
+                            selectedKeys = if (selected) {
+                                selectedKeys + item.key
+                            } else {
+                                selectedKeys - item.key
+                            }
+                        }
+                    )
+                }
+            }
+
+            if (preview.hasMoreItems) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Showing the first ${preview.items.size} of ${preview.reportedItemCount} items.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            DownloadButton(
+                enabled = selectedItems.isNotEmpty(),
+                label = when (selectedItems.size) {
+                    0 -> "Select items to continue"
+                    1 -> "Queue 1 download"
+                    else -> "Queue ${selectedItems.size} downloads"
+                },
+                onClick = { onQueue(selectedItems.map(PlaylistItem::url)) }
+            )
+        }
+    }
 }
 
 @Composable
-private fun DownloadButton(enabled: Boolean, label: String, onClick: () -> Unit) {
+private fun PlaylistSelectionRow(
+    item: PlaylistItem,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit
+) {
+    Surface(
+        onClick = { onSelectedChange(!selected) },
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.size(width = 72.dp, height = 44.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                if (item.thumbnailUrl.isNullOrBlank()) {
+                    Icon(
+                        Icons.Rounded.VideoLibrary,
+                        contentDescription = null,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                } else {
+                    AsyncImage(
+                        model = item.thumbnailUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val details = listOfNotNull(
+                    item.uploader?.takeIf(String::isNotBlank),
+                    item.durationSeconds?.let(::formatPlaylistDuration)
+                ).joinToString(" · ")
+                if (details.isNotBlank()) {
+                    Text(
+                        details,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Checkbox(
+                checked = selected,
+                onCheckedChange = onSelectedChange
+            )
+        }
+    }
+}
+
+private fun formatPlaylistDuration(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val remaining = seconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remaining)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, remaining)
+    }
+}
+
+@Composable
+private fun DownloadButton(
+    enabled: Boolean,
+    label: String,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         enabled = enabled,
@@ -270,11 +550,19 @@ private fun DownloadButton(enabled: Boolean, label: String, onClick: () -> Unit)
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                painterResource(R.drawable.download),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Icon(
+                    painterResource(R.drawable.download),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             Spacer(Modifier.size(8.dp))
             Text(label, style = MaterialTheme.typography.labelLarge)
         }

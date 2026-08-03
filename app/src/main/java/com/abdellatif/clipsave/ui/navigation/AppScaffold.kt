@@ -120,6 +120,12 @@ fun AppScaffold(
 
     LaunchedEffect(launchRequest?.key, downloadsLoaded, downloads) {
         val request = launchRequest ?: return@LaunchedEffect
+        if (!request.newDownloadUrl.isNullOrBlank()) {
+            vm.openNewDownload(request.newDownloadUrl)
+            navigateToTab(Tab.PASTE)
+            onLaunchRequestConsumed(request)
+            return@LaunchedEffect
+        }
         if (!downloadsLoaded) return@LaunchedEffect
         val item = request.downloadId?.let { id -> downloads.firstOrNull { it.id == id } }
         if (!request.showDownloads && item != null &&

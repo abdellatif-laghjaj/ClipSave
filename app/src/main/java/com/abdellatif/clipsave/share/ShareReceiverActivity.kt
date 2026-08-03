@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.abdellatif.clipsave.data.model.DownloadFormat
+import com.abdellatif.clipsave.data.model.CollectionUrlDetector
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.data.model.UrlInputParser
 import com.abdellatif.clipsave.data.preferences.Settings
@@ -42,6 +43,7 @@ import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.download.DownloadService
 import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.components.PlatformIcon
+import com.abdellatif.clipsave.ui.MainActivity
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
 
 class ShareReceiverActivity : ComponentActivity() {
@@ -70,6 +72,19 @@ class ShareReceiverActivity : ComponentActivity() {
         if (sharedUrls.isEmpty()) {
             Toast.makeText(this, "No link found in shared text.", Toast.LENGTH_SHORT).show()
             finish(); return
+        }
+        val sharedCollection = sharedUrls.singleOrNull()
+            ?.takeIf(CollectionUrlDetector::isLikelyCollection)
+        if (sharedCollection != null) {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    action = MainActivity.ACTION_REVIEW_URL
+                    putExtra(MainActivity.EXTRA_URL, sharedCollection)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+            )
+            finish()
+            return
         }
         setContent {
             val settings by userPreferences.settings.collectAsState(initial = Settings())

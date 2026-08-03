@@ -4,5 +4,6 @@ package com.abdellatif.clipsave.ui.navigation
 data class AppLaunchRequest(
     val key: Long,
     val downloadId: String? = null,
-    val showDownloads: Boolean = false
+    val showDownloads: Boolean = false,
+    val newDownloadUrl: String? = null
 )

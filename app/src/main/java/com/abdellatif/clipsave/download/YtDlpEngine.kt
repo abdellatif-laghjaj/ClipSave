@@ -7,6 +7,7 @@ import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.abdellatif.clipsave.data.model.DownloadFormat
+import com.abdellatif.clipsave.data.model.PlaylistPreview
 import java.io.File
 
 /**
@@ -16,6 +17,7 @@ import java.io.File
 object YtDlpEngine {
 
     private const val TAG = "YtDlpEngine"
+    const val PLAYLIST_PREVIEW_LIMIT = 100
 
     @Volatile
     private var initialized = false
@@ -77,6 +79,30 @@ object YtDlpEngine {
     }
 
     data class YtResult(val file: File, val title: String)
+
+    fun inspectPlaylist(
+        context: Context,
+        url: String,
+        processId: String
+    ): PlaylistPreview {
+        if (!ensureInit(context)) {
+            throw IllegalStateException("yt-dlp not available: ${lastInitError ?: "init failed"}")
+        }
+        if (!updated) runCatching { update(context) }
+
+        val request = YoutubeDLRequest(url).apply {
+            addOption("--flat-playlist")
+            addOption("--dump-single-json")
+            addOption("--skip-download")
+            addOption("--no-warnings")
+            addOption("--no-colors")
+            addOption("--playlist-end", PLAYLIST_PREVIEW_LIMIT.toString())
+        }
+        val response = YoutubeDL.getInstance().execute(request, processId)
+        return PlaylistParser.parse(response.out, PLAYLIST_PREVIEW_LIMIT)
+            ?.takeIf { it.items.isNotEmpty() }
+            ?: throw IllegalArgumentException("This link does not contain a downloadable playlist.")
+    }
 
     private fun formatSelector(format: DownloadFormat): String = when (format) {
         DownloadFormat.BEST -> "bv*+ba/b"

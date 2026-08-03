@@ -73,6 +73,7 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **One-tap floating button** (Accessibility) while browsing Instagram / TikTok / X.
 - **Audio-only** extraction (m4a) for any supported video.
 - **Batch downloads** from pasted or shared text with automatic link deduplication.
+- **Playlist review** with metadata, thumbnails, durations, selective queueing, and safe limits.
 - **Pause and resume** with retained yt-dlp partial files, including process-death recovery.
 - **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
 - **Accelerated transfers** with four conservative aria2 segments where the source supports them.

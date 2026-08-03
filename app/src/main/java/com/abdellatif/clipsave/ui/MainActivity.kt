@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.abdellatif.clipsave.data.model.DownloadFormat
+import com.abdellatif.clipsave.data.model.CollectionUrlDetector
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.DownloadService
@@ -102,6 +103,15 @@ class MainActivity : ComponentActivity() {
                     showDownloads = true
                 )
             }
+
+            ACTION_REVIEW_URL -> {
+                intent.getStringExtra(EXTRA_URL)?.takeIf(String::isNotBlank)?.let { url ->
+                    launchRequest.value = AppLaunchRequest(
+                        key = System.nanoTime(),
+                        newDownloadUrl = url
+                    )
+                }
+            }
         }
     }
 
@@ -116,7 +126,9 @@ class MainActivity : ComponentActivity() {
     private fun performQuickGrab() {
         val clip = readClipboardUrl()
         if (clip != null) {
-            if (FileSaver.needsLegacyStoragePermission(this)) {
+            if (CollectionUrlDetector.isLikelyCollection(clip)) {
+                queueQuickGrab(clip)
+            } else if (FileSaver.needsLegacyStoragePermission(this)) {
                 pendingLegacyQuickGrab = clip
                 requestLegacyStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             } else {
@@ -132,6 +144,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun queueQuickGrab(url: String) {
+        if (CollectionUrlDetector.isLikelyCollection(url)) {
+            launchRequest.value = AppLaunchRequest(
+                key = System.nanoTime(),
+                newDownloadUrl = url
+            )
+            Toast.makeText(this, "Choose the playlist items to download.", Toast.LENGTH_LONG).show()
+            return
+        }
         DownloadService.start(this, url, DownloadFormat.BEST)
         Toast.makeText(
             this,
@@ -156,7 +176,9 @@ class MainActivity : ComponentActivity() {
         const val ACTION_QUICK_GRAB = "com.abdellatif.clipsave.action.QUICK_GRAB"
         const val ACTION_OPEN_DOWNLOAD = "com.abdellatif.clipsave.action.OPEN_DOWNLOAD"
         const val ACTION_SHOW_DOWNLOADS = "com.abdellatif.clipsave.action.SHOW_DOWNLOADS"
+        const val ACTION_REVIEW_URL = "com.abdellatif.clipsave.action.REVIEW_URL"
         const val EXTRA_DOWNLOAD_ID = "download_id"
+        const val EXTRA_URL = "url"
     }
 }
 
