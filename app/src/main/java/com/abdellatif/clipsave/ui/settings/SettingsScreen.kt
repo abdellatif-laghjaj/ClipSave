@@ -3,6 +3,8 @@ package com.abdellatif.clipsave.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -70,6 +72,12 @@ import androidx.core.net.toUri
 fun SettingsScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val cookieStatus by vm.cookieStatus.collectAsStateWithLifecycle()
+    val cookiePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) vm.importCookies(uri)
+    }
     var engineMsg by remember { mutableStateOf("") }
     var updating by remember { mutableStateOf(false) }
     val captionLanguage = remember {
@@ -236,6 +244,37 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
 
+        SettingsGroup("Site access") {
+            Text(
+                "Import cookies only for media you are allowed to access. The file stays in ClipSave's private storage and is excluded from backups.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                if (cookieStatus.configured) {
+                    val siteLabel = if (cookieStatus.domainCount == 1) "site" else "sites"
+                    "Ready · ${cookieStatus.cookieCount} cookies across ${cookieStatus.domainCount} $siteLabel"
+                } else {
+                    "No cookies imported"
+                },
+                style = MaterialTheme.typography.titleSmall
+            )
+            PillButton(
+                label = if (cookieStatus.configured) "Replace cookies.txt" else "Import cookies.txt",
+                enabled = !cookieStatus.isWorking,
+                loading = cookieStatus.isWorking,
+                onClick = { cookiePicker.launch(arrayOf("text/plain", "*/*")) }
+            )
+            if (cookieStatus.configured) {
+                PillButton(
+                    label = "Remove saved cookies",
+                    enabled = !cookieStatus.isWorking,
+                    danger = true,
+                    onClick = vm::removeCookies
+                )
+            }
+        }
+
         SettingsGroup("Access mode") {
             Text(
                 "Downloads to /Download/ need no root. These modes are for grabbing from protected locations.",
@@ -377,6 +416,7 @@ private fun PillButton(
     label: String,
     enabled: Boolean = true,
     loading: Boolean = false,
+    danger: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
@@ -385,7 +425,8 @@ private fun PillButton(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        contentColor = if (danger) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurface
     ) {
         Row(
             Modifier

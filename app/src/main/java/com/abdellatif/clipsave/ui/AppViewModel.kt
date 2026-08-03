@@ -1,6 +1,7 @@
 package com.abdellatif.clipsave.ui
 
 import android.app.Application
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -18,6 +19,8 @@ import com.abdellatif.clipsave.data.preferences.NetworkPolicy
 import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.DownloadService
+import com.abdellatif.clipsave.download.CookieStatus
+import com.abdellatif.clipsave.download.CookieStore
 import com.abdellatif.clipsave.download.YtDlpEngine
 import com.abdellatif.clipsave.media.SavedMediaManager
 import com.abdellatif.clipsave.notif.NotificationHelper
@@ -43,6 +46,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val downloads = repo.downloads
     val downloadsLoaded = repo.loaded
     val settings = prefs.settings.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
+    private val _cookieStatus = MutableStateFlow(CookieStore.status(app))
+    val cookieStatus = _cookieStatus.asStateFlow()
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages = _messages.asSharedFlow()
     private val _playlistInspection = MutableStateFlow<PlaylistInspectionState>(
@@ -130,6 +135,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             YtDlpEngine.update(getApplication(), force = true)
         }
         onResult(msg)
+    }
+
+    fun importCookies(uri: Uri) {
+        if (_cookieStatus.value.isWorking) return
+        _cookieStatus.value = _cookieStatus.value.copy(isWorking = true)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = CookieStore.import(getApplication(), uri)
+                _cookieStatus.value = result.status
+                _messages.emit(result.message)
+            } catch (error: Exception) {
+                _cookieStatus.value = CookieStore.status(getApplication())
+                _messages.emit(error.message ?: "The cookie file could not be imported.")
+            }
+        }
+    }
+
+    fun removeCookies() {
+        if (_cookieStatus.value.isWorking) return
+        _cookieStatus.value = _cookieStatus.value.copy(isWorking = true)
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = CookieStore.remove(getApplication())
+            _cookieStatus.value = result.status
+            _messages.emit(result.message)
+        }
     }
 
     fun delete(id: String) {

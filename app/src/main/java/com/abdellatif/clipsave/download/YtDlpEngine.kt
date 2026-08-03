@@ -58,13 +58,19 @@ object YtDlpEngine {
     }
 
     /** Pull the latest yt-dlp extractors. Safe to call repeatedly; cheap if already current. */
+    @Synchronized
     fun update(context: Context, force: Boolean = false): String {
         if (!ensureInit(context)) return "Engine not available: ${lastInitError ?: "init failed"}"
         if (updated && !force) return "Already updated this session (yt-dlp ${ytdlpVersion ?: "?"})"
+        if (!force && !EngineUpdatePolicy.shouldRefresh(context)) {
+            updated = true
+            return "Checked within the last 24 hours (yt-dlp ${ytdlpVersion ?: "?"})"
+        }
         return try {
             val status = YoutubeDL.getInstance()
                 .updateYoutubeDL(context.applicationContext, YoutubeDL.UpdateChannel.STABLE)
             updated = true
+            EngineUpdatePolicy.recordSuccess(context)
             ytdlpVersion = runCatching {
                 YoutubeDL.getInstance().version(context.applicationContext)
             }.getOrNull()
@@ -92,6 +98,7 @@ object YtDlpEngine {
         if (!updated) runCatching { update(context) }
 
         val request = YoutubeDLRequest(url).apply {
+            CookieStore.activeFile(context)?.let { addOption("--cookies", it.absolutePath) }
             addOption("--flat-playlist")
             addOption("--dump-single-json")
             addOption("--skip-download")
@@ -131,6 +138,7 @@ object YtDlpEngine {
         // Keep an existing work directory so a paused or interrupted transfer can continue.
         val workDir = File(parentDir, "yt_$processId").apply { mkdirs() }
         val request = YoutubeDLRequest(url).apply {
+            CookieStore.activeFile(context)?.let { addOption("--cookies", it.absolutePath) }
             addOption("-o", File(workDir, "%(title).80s.%(ext)s").absolutePath)
             addOption("--no-playlist")
             addOption("--no-mtime")
