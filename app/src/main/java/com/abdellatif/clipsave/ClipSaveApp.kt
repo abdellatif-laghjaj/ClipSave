@@ -49,6 +49,6 @@ class ClipSaveApp : Application() {
     }
 
     private companion object {
-        const val ENGINE_WARMUP_DELAY_MS = 2_500L
+        const val ENGINE_WARMUP_DELAY_MS = 10_000L
     }
 }
