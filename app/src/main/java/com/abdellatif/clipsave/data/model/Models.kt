@@ -4,7 +4,15 @@ import kotlinx.serialization.Serializable
 
 enum class MediaType { IMAGE, VIDEO, AUDIO, UNKNOWN }
 
-enum class DownloadStatus { QUEUED, EXTRACTING, DOWNLOADING, PAUSED, COMPLETED, FAILED }
+enum class DownloadStatus {
+    QUEUED,
+    WAITING_FOR_NETWORK,
+    EXTRACTING,
+    DOWNLOADING,
+    PAUSED,
+    COMPLETED,
+    FAILED
+}
 
 /** User-selectable quality / container. */
 enum class DownloadFormat(val label: String) {
@@ -96,6 +104,8 @@ data class Download(
     val progress: Int = 0,
     val bytesDownloaded: Long = 0,
     val totalBytes: Long = 0,
+    val speedBytesPerSecond: Long = 0,
+    val etaSeconds: Long = -1,
     val thumbnailUrl: String? = null,
     val errorMessage: String? = null,
     val createdAt: Long = System.currentTimeMillis(),

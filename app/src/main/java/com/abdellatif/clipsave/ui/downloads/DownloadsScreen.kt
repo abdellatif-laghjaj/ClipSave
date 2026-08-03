@@ -103,7 +103,7 @@ fun DownloadsScreen(
                 MinimalChip(
                     selected = filter == status,
                     onClick = { filter = if (filter == status) null else status },
-                    label = status.name.lowercase(Locale.US)
+                    label = status.name.lowercase(Locale.US).replace('_', ' ')
                         .replaceFirstChar { it.uppercase(Locale.US) }
                 )
             }

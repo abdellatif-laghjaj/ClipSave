@@ -54,6 +54,7 @@ fun HomeScreen(
             it.status == DownloadStatus.DOWNLOADING ||
                 it.status == DownloadStatus.EXTRACTING ||
                 it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.WAITING_FOR_NETWORK ||
                 it.status == DownloadStatus.PAUSED
         }
     }
@@ -61,7 +62,8 @@ fun HomeScreen(
         downloads.count {
             it.status == DownloadStatus.DOWNLOADING ||
                 it.status == DownloadStatus.EXTRACTING ||
-                it.status == DownloadStatus.QUEUED
+                it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.WAITING_FOR_NETWORK
         }
     }
     val recent = remember(downloads) {

@@ -18,6 +18,11 @@ class DownloadRepositoryTest {
                 status = DownloadStatus.DOWNLOADING
             ),
             Download(
+                id = "network",
+                url = "https://example.com/waiting",
+                status = DownloadStatus.WAITING_FOR_NETWORK
+            ),
+            Download(
                 id = "done",
                 url = "https://example.com/3",
                 status = DownloadStatus.COMPLETED
@@ -28,11 +33,12 @@ class DownloadRepositoryTest {
 
         assertEquals(DownloadStatus.PAUSED, recovered[0].status)
         assertEquals(DownloadStatus.PAUSED, recovered[1].status)
-        assertEquals(DownloadStatus.COMPLETED, recovered[2].status)
+        assertEquals(DownloadStatus.PAUSED, recovered[2].status)
+        assertEquals(DownloadStatus.COMPLETED, recovered[3].status)
         assertEquals(
             "Interrupted before completion. Tap Resume to continue.",
             recovered[0].errorMessage
         )
-        assertNull(recovered[2].errorMessage)
+        assertNull(recovered[3].errorMessage)
     }
 }

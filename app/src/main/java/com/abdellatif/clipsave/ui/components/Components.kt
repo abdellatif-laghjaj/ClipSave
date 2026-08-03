@@ -72,6 +72,18 @@ fun formatBytes(bytes: Long): String {
     return String.format(Locale.US, "%.1f %s", value, units[unit])
 }
 
+fun formatEta(seconds: Long): String {
+    if (seconds < 0) return ""
+    val hours = seconds / 3_600
+    val minutes = (seconds % 3_600) / 60
+    val remaining = seconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remaining)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, remaining)
+    }
+}
+
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -127,6 +139,8 @@ fun MinimalChip(
 fun StatusBadge(status: DownloadStatus) {
     val (label, color) = when (status) {
         DownloadStatus.QUEUED -> "Queued" to MaterialTheme.colorScheme.onSurfaceVariant
+        DownloadStatus.WAITING_FOR_NETWORK ->
+            "Waiting for network" to MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.EXTRACTING -> "Extracting" to MaterialTheme.colorScheme.primary
         DownloadStatus.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
         DownloadStatus.PAUSED -> "Paused" to MaterialTheme.colorScheme.onSurfaceVariant
@@ -172,6 +186,12 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
 
 private val Download.isBusy: Boolean
     get() = status == DownloadStatus.QUEUED ||
+        status == DownloadStatus.WAITING_FOR_NETWORK ||
+        status == DownloadStatus.DOWNLOADING ||
+        status == DownloadStatus.EXTRACTING
+
+private val Download.isActiveTransfer: Boolean
+    get() = status == DownloadStatus.QUEUED ||
         status == DownloadStatus.DOWNLOADING ||
         status == DownloadStatus.EXTRACTING
 
@@ -185,6 +205,30 @@ private val Download.isLegacyTwitterPreview: Boolean
         platform == Platform.TWITTER &&
         mediaType == MediaType.IMAGE &&
         fileName.startsWith("dl_")
+
+private fun transferDetails(item: Download): String {
+    val parts = buildList {
+        when {
+            item.bytesDownloaded > 0 && item.totalBytes > 0 -> add(
+                "${formatBytes(item.bytesDownloaded)} / ${formatBytes(item.totalBytes)}"
+            )
+            item.bytesDownloaded > 0 -> add(formatBytes(item.bytesDownloaded))
+        }
+        if (item.speedBytesPerSecond > 0) {
+            add("${formatBytes(item.speedBytesPerSecond)}/s")
+        }
+        if (item.etaSeconds >= 0) {
+            add("${formatEta(item.etaSeconds)} left")
+        }
+    }
+    return parts.joinToString(" · ").ifBlank {
+        when (item.status) {
+            DownloadStatus.QUEUED -> "Queued"
+            DownloadStatus.EXTRACTING -> "Preparing media"
+            else -> "Transferring"
+        }
+    }
+}
 
 @Composable
 fun DownloadRow(
@@ -245,17 +289,15 @@ fun DownloadRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (item.status == DownloadStatus.COMPLETED) {
-                        Spacer(Modifier.height(3.dp))
-                        if (item.isLegacyTwitterPreview) {
-                            Text(
-                                text = "Preview only · retry",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            StatusBadge(item.status)
-                        }
+                    Spacer(Modifier.height(3.dp))
+                    if (item.isLegacyTwitterPreview) {
+                        Text(
+                            text = "Preview only · retry",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        StatusBadge(item.status)
                     }
                 }
             }
@@ -304,7 +346,7 @@ fun DownloadRow(
             }
 
             AnimatedVisibility(
-                visible = item.isBusy,
+                visible = item.isActiveTransfer,
                 enter = expandVertically(),
                 exit = shrinkVertically()
             ) {
@@ -313,25 +355,46 @@ fun DownloadRow(
                     animationSpec = tween(220),
                     label = "downloadProgress"
                 )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                ) {
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Box(
                         Modifier
-                            .fillMaxWidth(progress)
+                            .fillMaxWidth()
                             .height(4.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(progress)
+                                .height(4.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = transferDetails(item),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${item.progress.coerceIn(0, 100)}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
-            if ((item.status == DownloadStatus.FAILED || item.status == DownloadStatus.PAUSED) &&
+            if ((item.status == DownloadStatus.FAILED ||
+                    item.status == DownloadStatus.PAUSED ||
+                    item.status == DownloadStatus.WAITING_FOR_NETWORK) &&
                 !item.errorMessage.isNullOrBlank()
             ) {
                 Text(

@@ -12,6 +12,7 @@ import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
 import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
+import com.abdellatif.clipsave.data.preferences.NetworkPolicy
 import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.DownloadService
@@ -99,6 +100,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { prefs.setTheme(mode) }
     fun setAccentColor(color: AccentColor) = viewModelScope.launch { prefs.setAccentColor(color) }
     fun setAccessMode(mode: AccessMode) = viewModelScope.launch { prefs.setAccessMode(mode) }
+    fun setNetworkPolicy(policy: NetworkPolicy) =
+        viewModelScope.launch { prefs.setNetworkPolicy(policy) }
     fun completeOnboarding() = viewModelScope.launch { prefs.setOnboardingDone(true) }
 
     companion object {

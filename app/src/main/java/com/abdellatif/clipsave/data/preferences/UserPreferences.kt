@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class AccentColor { AMBER, BLUE, PURPLE, RED, GREEN, ORANGE }
 enum class AccessMode { NORMAL, ACCESSIBILITY, SHIZUKU, ROOT }
+enum class NetworkPolicy { ANY, UNMETERED_ONLY }
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "clipsave_prefs")
 
@@ -20,6 +21,7 @@ data class Settings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accentColor: AccentColor = AccentColor.AMBER,
     val accessMode: AccessMode = AccessMode.NORMAL,
+    val networkPolicy: NetworkPolicy = NetworkPolicy.ANY,
     val onboardingDone: Boolean = false
 )
 
@@ -29,6 +31,7 @@ class UserPreferences(private val context: Context) {
         val THEME = stringPreferencesKey("theme_mode")
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val ACCESS = stringPreferencesKey("access_mode")
+        val NETWORK_POLICY = stringPreferencesKey("network_policy")
         val ONBOARDING = booleanPreferencesKey("onboarding_done")
     }
 
@@ -45,6 +48,9 @@ class UserPreferences(private val context: Context) {
                     p[Keys.ACCESS] ?: "NORMAL"
                 )
             }.getOrDefault(AccessMode.NORMAL),
+            networkPolicy = runCatching {
+                NetworkPolicy.valueOf(p[Keys.NETWORK_POLICY] ?: "ANY")
+            }.getOrDefault(NetworkPolicy.ANY),
             onboardingDone = p[Keys.ONBOARDING] ?: false
         )
     }
@@ -59,6 +65,10 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setAccessMode(mode: AccessMode) {
         context.dataStore.edit { it[Keys.ACCESS] = mode.name }
+    }
+
+    suspend fun setNetworkPolicy(policy: NetworkPolicy) {
+        context.dataStore.edit { it[Keys.NETWORK_POLICY] = policy.name }
     }
 
     suspend fun setOnboardingDone(done: Boolean) {

@@ -108,11 +108,14 @@ class DownloadRepository(context: Context) {
 
 internal fun List<Download>.recoverInterruptedDownloads(): List<Download> = map { download ->
     if (download.status == DownloadStatus.QUEUED ||
+        download.status == DownloadStatus.WAITING_FOR_NETWORK ||
         download.status == DownloadStatus.EXTRACTING ||
         download.status == DownloadStatus.DOWNLOADING
     ) {
         download.copy(
             status = DownloadStatus.PAUSED,
+            speedBytesPerSecond = 0,
+            etaSeconds = -1,
             errorMessage = "Interrupted before completion. Tap Resume to continue."
         )
     } else {

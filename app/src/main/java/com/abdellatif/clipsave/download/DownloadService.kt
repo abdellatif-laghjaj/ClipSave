@@ -12,9 +12,13 @@ import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.preferences.NetworkPolicy
+import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.data.repository.DownloadRepository
 import com.abdellatif.clipsave.extractor.ExtractorRegistry
 import com.abdellatif.clipsave.network.HttpClient
+import com.abdellatif.clipsave.network.NetworkMonitor
+import com.abdellatif.clipsave.network.NetworkState
 import com.abdellatif.clipsave.notif.NotificationHelper
 import java.io.File
 import java.util.UUID
@@ -29,6 +33,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -62,10 +69,15 @@ class DownloadService : Service() {
     @Volatile
     private var lastNotified = 0L
     private lateinit var repo: DownloadRepository
+    private lateinit var prefs: UserPreferences
+    private lateinit var networkMonitor: NetworkMonitor
 
     override fun onCreate() {
         super.onCreate()
-        repo = (application as ClipSaveApp).container.downloadRepository
+        val container = (application as ClipSaveApp).container
+        repo = container.downloadRepository
+        prefs = container.userPreferences
+        networkMonitor = NetworkMonitor(this)
         updateForeground("Preparing download", 0, null)
     }
 
@@ -109,6 +121,8 @@ class DownloadService : Service() {
             mediaType = mediaType,
             format = request.format,
             status = DownloadStatus.QUEUED,
+            speedBytesPerSecond = 0,
+            etaSeconds = -1,
             errorMessage = null
         ) ?: Download(
             id = request.id,
@@ -123,7 +137,16 @@ class DownloadService : Service() {
         lateinit var job: Job
         job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                slots.withPermit { runDownload(request) }
+                awaitEligibleNetwork(request)
+                slots.withPermit {
+                    ensureRunning(request.id)
+                    val networkGuard = monitorNetworkEligibility(request)
+                    try {
+                        runDownload(request)
+                    } finally {
+                        networkGuard.cancel()
+                    }
+                }
             } finally {
                 if (request.id in removedIds) {
                     YtDlpEngine.cleanup(this@DownloadService, request.id)
@@ -153,6 +176,75 @@ class DownloadService : Service() {
         }
     }
 
+    private suspend fun awaitEligibleNetwork(request: StartRequest) {
+        val policy = prefs.settings.first().networkPolicy
+        val network = networkMonitor.state.value
+        if (!network.isEligible(policy)) {
+            val message = waitingMessage(policy, network)
+            repo.get(request.id)?.let { current ->
+                publish(
+                    current.copy(
+                        status = DownloadStatus.WAITING_FOR_NETWORK,
+                        speedBytesPerSecond = 0,
+                        etaSeconds = -1,
+                        errorMessage = message
+                    )
+                )
+            }
+            updateForeground(
+                if (network.connected) "Waiting for an unmetered network" else "Waiting for internet",
+                0,
+                request.id
+            )
+        }
+
+        combine(networkMonitor.state, prefs.settings) { state, settings ->
+            state.isEligible(settings.networkPolicy)
+        }.first { it }
+        ensureRunning(request.id)
+        repo.get(request.id)?.takeIf {
+            it.status == DownloadStatus.WAITING_FOR_NETWORK
+        }?.let { waiting ->
+            publish(waiting.copy(status = DownloadStatus.QUEUED, errorMessage = null))
+        }
+    }
+
+    private fun monitorNetworkEligibility(request: StartRequest): Job = scope.launch {
+        combine(networkMonitor.state, prefs.settings) { state, settings ->
+            state.isEligible(settings.networkPolicy)
+        }
+            .distinctUntilChanged()
+            .first { eligible -> !eligible }
+
+        val current = repo.get(request.id) ?: return@launch
+        if (current.status !in BUSY_STATUSES || request.id in pauseRequests ||
+            request.id in removedIds
+        ) {
+            return@launch
+        }
+        val policy = prefs.settings.first().networkPolicy
+        val network = networkMonitor.state.value
+        repo.upsert(
+            current.copy(
+                status = DownloadStatus.WAITING_FOR_NETWORK,
+                speedBytesPerSecond = 0,
+                etaSeconds = -1,
+                errorMessage = waitingMessage(policy, network)
+            )
+        )
+        restartRequests[request.id] = request
+        activeCalls.remove(request.id)?.cancel()
+        YtDlpEngine.cancel(request.id)
+        jobs[request.id]?.cancel()
+    }
+
+    private fun waitingMessage(policy: NetworkPolicy, network: NetworkState): String = when {
+        !network.connected -> "Waiting for an internet connection. Download starts automatically."
+        policy == NetworkPolicy.UNMETERED_ONLY ->
+            "Waiting for an unmetered connection. Download starts automatically."
+        else -> "Waiting for a usable network. Download starts automatically."
+    }
+
     private suspend fun runDownload(request: StartRequest) {
         val platform = Platform.fromUrl(request.url)
         val notifId = request.id.hashCode() and 0xFFFF
@@ -160,6 +252,8 @@ class DownloadService : Service() {
         var item = repo.get(request.id)?.copy(
             status = DownloadStatus.EXTRACTING,
             progress = 0,
+            speedBytesPerSecond = 0,
+            etaSeconds = -1,
             errorMessage = null,
             mediaType = baseType,
             format = request.format
@@ -181,11 +275,11 @@ class DownloadService : Service() {
                     request.id
                 ) { progress ->
                     if (request.id !in pauseRequests && request.id !in removedIds) {
-                        item = item.copy(progress = progress)
+                        item = item.withProgress(progress)
                         publish(item)
                         updateForeground(
                             item.title.ifBlank { platform.displayName },
-                            progress,
+                            progress.percent,
                             request.id
                         )
                     }
@@ -208,7 +302,9 @@ class DownloadService : Service() {
                     item.copy(
                         title = result.title,
                         mediaType = type,
-                        fileName = result.file.name
+                        fileName = result.file.name,
+                        bytesDownloaded = result.file.length(),
+                        totalBytes = result.file.length()
                     ),
                     savedUri,
                     notifId
@@ -250,11 +346,11 @@ class DownloadService : Service() {
                             media.suggestedExtension ?: extOf(media.mediaType),
                             media.mediaType
                         ) { progress ->
-                            item = item.copy(progress = progress)
+                            item = item.withProgress(progress)
                             publish(item)
                             updateForeground(
                                 item.title.ifBlank { platform.displayName },
-                                progress,
+                                progress.percent,
                                 request.id
                             )
                         }
@@ -265,8 +361,17 @@ class DownloadService : Service() {
                             item.title.ifBlank { defaultName(platform) },
                             media.mediaType
                         )
+                        val savedSize = temp.length()
                         temp.delete()
-                        finishSuccess(item.copy(fileName = temp.name), savedUri, notifId)
+                        finishSuccess(
+                            item.copy(
+                                fileName = temp.name,
+                                bytesDownloaded = savedSize,
+                                totalBytes = savedSize
+                            ),
+                            savedUri,
+                            notifId
+                        )
                         YtDlpEngine.cleanup(this, request.id)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -289,7 +394,7 @@ class DownloadService : Service() {
         url: String,
         ext: String,
         mediaType: MediaType,
-        onProgress: (Int) -> Unit
+        onProgress: (DownloadProgress) -> Unit
     ): File {
         val temp = File.createTempFile("dl_", ".$ext", cacheDir)
         val call = HttpClient.client.newCall(HttpClient.request(url, mobile = true))
@@ -301,21 +406,47 @@ class DownloadService : Service() {
                 val total = body.contentLength()
                 body.byteStream().use { input ->
                     temp.outputStream().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
                         var completed = 0L
                         var lastPercent = -1
+                        var lastBytes = 0L
+                        var lastSampleAt = android.os.SystemClock.elapsedRealtime()
                         while (true) {
                             currentCoroutineContext().ensureActive()
                             val read = input.read(buffer)
                             if (read == -1) break
                             output.write(buffer, 0, read)
                             completed += read
-                            if (total > 0) {
-                                val percent = ((completed * 100) / total).toInt()
-                                if (percent != lastPercent) {
-                                    lastPercent = percent
-                                    onProgress(percent)
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            val percent = if (total > 0) {
+                                ((completed * 100) / total).toInt().coerceIn(0, 100)
+                            } else {
+                                0
+                            }
+                            val elapsed = now - lastSampleAt
+                            if (percent != lastPercent || elapsed >= PROGRESS_INTERVAL_MS) {
+                                val speed = if (elapsed >= MIN_SPEED_SAMPLE_MS) {
+                                    ((completed - lastBytes) * 1_000L / elapsed).coerceAtLeast(0)
+                                } else {
+                                    0
                                 }
+                                val eta = if (total > completed && speed > 0) {
+                                    (total - completed) / speed
+                                } else {
+                                    -1
+                                }
+                                lastPercent = percent
+                                lastBytes = completed
+                                lastSampleAt = now
+                                onProgress(
+                                    DownloadProgress(
+                                        percent = percent,
+                                        bytesDownloaded = completed,
+                                        totalBytes = total.coerceAtLeast(0),
+                                        speedBytesPerSecond = speed,
+                                        etaSeconds = eta
+                                    )
+                                )
                             }
                         }
                     }
@@ -343,6 +474,8 @@ class DownloadService : Service() {
         repo.upsert(
             item.copy(
                 status = DownloadStatus.PAUSED,
+                speedBytesPerSecond = 0,
+                etaSeconds = -1,
                 errorMessage = null
             )
         )
@@ -404,11 +537,23 @@ class DownloadService : Service() {
         if (download.id !in pauseRequests && download.id !in removedIds) repo.upsert(download)
     }
 
+    private fun Download.withProgress(progress: DownloadProgress): Download = copy(
+        progress = progress.percent,
+        bytesDownloaded = progress.bytesDownloaded.takeIf { it > 0 } ?: bytesDownloaded,
+        totalBytes = progress.totalBytes.takeIf { it > 0 } ?: totalBytes,
+        speedBytesPerSecond = progress.speedBytesPerSecond,
+        etaSeconds = progress.etaSeconds
+    )
+
     private fun finishSuccess(base: Download, uri: String, notifId: Int) {
         if (base.id in removedIds) return
         val completed = base.copy(
             status = DownloadStatus.COMPLETED,
             progress = 100,
+            bytesDownloaded = maxOf(base.bytesDownloaded, base.totalBytes),
+            totalBytes = maxOf(base.bytesDownloaded, base.totalBytes),
+            speedBytesPerSecond = 0,
+            etaSeconds = 0,
             localUri = uri,
             completedAt = System.currentTimeMillis(),
             errorMessage = null
@@ -427,7 +572,12 @@ class DownloadService : Service() {
 
     private fun finishFailure(base: Download, message: String, notifId: Int) {
         if (base.id in pauseRequests || base.id in removedIds) return
-        val failed = base.copy(status = DownloadStatus.FAILED, errorMessage = message)
+        val failed = base.copy(
+            status = DownloadStatus.FAILED,
+            speedBytesPerSecond = 0,
+            etaSeconds = -1,
+            errorMessage = message
+        )
         repo.upsert(failed)
         YtDlpEngine.cleanupIfNoPartial(this, base.id)
         NotificationHelper.notifyDone(
@@ -470,6 +620,7 @@ class DownloadService : Service() {
     override fun onDestroy() {
         activeCalls.values.forEach(Call::cancel)
         jobs.values.forEach(Job::cancel)
+        networkMonitor.close()
         scope.cancel()
         super.onDestroy()
     }
@@ -504,9 +655,13 @@ class DownloadService : Service() {
         private const val ACTION_CLEAR_ALL = "com.abdellatif.clipsave.action.CLEAR_DOWNLOADS"
         private const val MAX_CONCURRENT_DOWNLOADS = 2
         private const val NOTIFICATION_INTERVAL_MS = 250L
+        private const val PROGRESS_INTERVAL_MS = 500L
+        private const val MIN_SPEED_SAMPLE_MS = 250L
+        private const val DOWNLOAD_BUFFER_SIZE = 64 * 1024
 
         private val BUSY_STATUSES = setOf(
             DownloadStatus.QUEUED,
+            DownloadStatus.WAITING_FOR_NETWORK,
             DownloadStatus.EXTRACTING,
             DownloadStatus.DOWNLOADING
         )

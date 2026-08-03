@@ -75,6 +75,9 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **Batch downloads** from pasted or shared text with automatic link deduplication.
 - **Pause and resume** with retained yt-dlp partial files, including process-death recovery.
 - **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
+- **Accelerated transfers** with four conservative aria2 segments where the source supports them.
+- **Live transfer details** with downloaded size, total size, speed, percentage, and ETA.
+- **Unmetered-only mode** that waits on costly networks and resumes automatically when eligible.
 - **Foreground service** downloads with live progress and open/share completion actions.
 - **In-app media viewer** for video, audio, and images with seeking and 10-second skip controls.
 - **Secure saved-media sharing** through temporary Android content-URI permissions.

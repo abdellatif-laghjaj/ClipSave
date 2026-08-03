@@ -26,12 +26,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abdellatif.clipsave.BuildConfig
 import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
+import com.abdellatif.clipsave.data.preferences.NetworkPolicy
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.YtDlpEngine
 import com.abdellatif.clipsave.privileged.RootHelper
@@ -124,6 +127,46 @@ fun SettingsScreen(vm: AppViewModel) {
                     )
                 }
             }
+        }
+
+        SettingsGroup("Downloads") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = settings.networkPolicy == NetworkPolicy.UNMETERED_ONLY,
+                        role = Role.Switch,
+                        onValueChange = { enabled ->
+                            vm.setNetworkPolicy(
+                                if (enabled) NetworkPolicy.UNMETERED_ONLY else NetworkPolicy.ANY
+                            )
+                        }
+                    )
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        "Unmetered downloads only",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        "Waits on mobile data or metered Wi-Fi, then resumes automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = settings.networkPolicy == NetworkPolicy.UNMETERED_ONLY,
+                    onCheckedChange = null
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Text(
+                "ClipSave runs up to two downloads at once and uses four efficient segments when supported.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         SettingsGroup("Download engine") {

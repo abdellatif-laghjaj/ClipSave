@@ -13,5 +13,7 @@ class DownloadSerializationTest {
         val download = Json.decodeFromString<Download>(oldJson)
 
         assertEquals(DownloadFormat.BEST, download.format)
+        assertEquals(0, download.speedBytesPerSecond)
+        assertEquals(-1, download.etaSeconds)
     }
 }

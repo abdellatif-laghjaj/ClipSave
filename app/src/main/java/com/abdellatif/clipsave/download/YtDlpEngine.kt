@@ -22,6 +22,8 @@ object YtDlpEngine {
     @Volatile
     private var updated = false
     @Volatile
+    private var aria2Available = false
+    @Volatile
     var lastInitError: String? = null
         private set
     @Volatile
@@ -35,7 +37,9 @@ object YtDlpEngine {
             return try {
                 YoutubeDL.getInstance().init(context.applicationContext)
                 runCatching { FFmpeg.getInstance().init(context.applicationContext) }
-                runCatching { Aria2c.getInstance().init(context.applicationContext) }
+                aria2Available = runCatching {
+                    Aria2c.getInstance().init(context.applicationContext)
+                }.isSuccess
                 initialized = true
                 lastInitError = null
                 ytdlpVersion = runCatching {
@@ -88,7 +92,7 @@ object YtDlpEngine {
         parentDir: File,
         format: DownloadFormat,
         processId: String,
-        onProgress: (Int) -> Unit
+        onProgress: (DownloadProgress) -> Unit
     ): YtResult {
         if (!ensureInit(context)) {
             throw IllegalStateException("yt-dlp not available: ${lastInitError ?: "init failed"}")
@@ -105,7 +109,28 @@ object YtDlpEngine {
             addOption("--restrict-filenames")
             addOption("--no-warnings")
             addOption("--continue")
+            addOption("--newline")
             addOption("-f", formatSelector(format))
+            if (aria2Available) {
+                // Four conservative segments improve throughput without excessive radio, CPU, or
+                // server pressure. HLS/DASH remain on yt-dlp's native downloader for compatibility.
+                addOption("--downloader", "libaria2c.so")
+                addOption("--downloader", "dash,m3u8:native")
+                val certificate = File(
+                    context.noBackupFilesDir,
+                    "youtubedl-android/packages/python/usr/etc/tls/cert.pem"
+                )
+                val ariaArgs = buildString {
+                    append("aria2c:-x 4 -s 4 -j 4 -k 1M ")
+                    append("--summary-interval=1 --file-allocation=none")
+                    if (certificate.isFile) {
+                        append(" --ca-certificate=").append(certificate.absolutePath)
+                    }
+                }
+                // The wrapper appends its own aria arguments during execute(). Custom commands
+                // are serialized afterward, so this final value wins over yt-dlp's -x16 default.
+                addCommands(listOf("--external-downloader-args", ariaArgs))
+            }
             if (format.isAudio) {
                 addOption("-x")
                 addOption(
@@ -117,8 +142,18 @@ object YtDlpEngine {
             }
         }
 
-        YoutubeDL.getInstance().execute(request, processId) { progress, _, _ ->
-            if (progress >= 0f) onProgress(progress.toInt().coerceIn(0, 100))
+        var previous: DownloadProgress? = null
+        YoutubeDL.getInstance().execute(request, processId) { progress, eta, line ->
+            val progressLine = line.contains("[download]", ignoreCase = true) ||
+                line.trimStart().startsWith("[#") ||
+                line.trimStart().startsWith("size=")
+            if (progress >= 0f && progressLine) {
+                val snapshot = DownloadProgressParser.parse(progress, eta, line, workDir)
+                if (snapshot != previous) {
+                    previous = snapshot
+                    onProgress(snapshot)
+                }
+            }
         }
 
         // The merged video (or the extracted audio) is the largest file in the work dir.
