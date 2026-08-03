@@ -30,9 +30,10 @@ android {
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
-            signingConfig = signingConfigs.getByName("debug")
+            // CI signs the optimized APK with the release keystore. Local release output remains
+            // intentionally unsigned so a debug certificate can never ship by accident.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -55,8 +56,8 @@ android {
     }
 
     lint {
-        abortOnError = false
-        checkReleaseBuilds = false
+        abortOnError = true
+        checkReleaseBuilds = true
     }
 
     packaging {

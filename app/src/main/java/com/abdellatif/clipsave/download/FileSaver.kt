@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 import com.abdellatif.clipsave.data.model.MediaType
 import java.io.File
 import java.io.FileInputStream
@@ -55,6 +56,7 @@ object FileSaver {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveViaMediaStore(
         context: Context,
         source: File,
