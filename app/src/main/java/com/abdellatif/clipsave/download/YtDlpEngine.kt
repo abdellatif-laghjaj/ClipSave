@@ -96,16 +96,15 @@ object YtDlpEngine {
         // Best effort: make sure extractors are fresh before the first real download.
         if (!updated) runCatching { update(context) }
 
-        val workDir = File(parentDir, "yt_$processId").apply {
-            deleteRecursively(); mkdirs()
-        }
+        // Keep an existing work directory so a paused or interrupted transfer can continue.
+        val workDir = File(parentDir, "yt_$processId").apply { mkdirs() }
         val request = YoutubeDLRequest(url).apply {
             addOption("-o", File(workDir, "%(title).80s.%(ext)s").absolutePath)
             addOption("--no-playlist")
             addOption("--no-mtime")
             addOption("--restrict-filenames")
             addOption("--no-warnings")
-            addOption("--no-part")
+            addOption("--continue")
             addOption("-f", formatSelector(format))
             if (format.isAudio) {
                 addOption("-x")
@@ -124,7 +123,13 @@ object YtDlpEngine {
 
         // The merged video (or the extracted audio) is the largest file in the work dir.
         val produced = workDir.listFiles()
-            ?.filter { it.isFile && it.length() > 0 }
+            ?.filter {
+                it.isFile &&
+                    it.length() > 0 &&
+                    !it.name.endsWith(".part") &&
+                    !it.name.endsWith(".ytdl") &&
+                    !it.name.contains(".frag")
+            }
             ?.maxByOrNull { it.length() }
             ?: throw IllegalStateException("yt-dlp produced no file.")
 
@@ -134,5 +139,17 @@ object YtDlpEngine {
 
     fun cancel(processId: String) {
         runCatching { YoutubeDL.getInstance().destroyProcessById(processId) }
+    }
+
+    fun cleanup(context: Context, processId: String) {
+        File(context.cacheDir, "yt_$processId").deleteRecursively()
+    }
+
+    fun cleanupIfNoPartial(context: Context, processId: String) {
+        val workDir = File(context.cacheDir, "yt_$processId")
+        val hasResumableData = workDir.listFiles()?.any {
+            it.isFile && it.length() > 0 && it.name.endsWith(".part")
+        } == true
+        if (!hasResumableData) workDir.deleteRecursively()
     }
 }

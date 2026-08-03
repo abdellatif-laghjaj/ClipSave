@@ -13,23 +13,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.model.UrlInputParser
 import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.data.preferences.UserPreferences
@@ -43,8 +47,8 @@ class ShareReceiverActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val shared = extractUrl(intent)
-        if (shared == null) {
+        val shared = extractUrls(intent)
+        if (shared.isEmpty()) {
             Toast.makeText(this, "No link found in shared text.", Toast.LENGTH_SHORT).show()
             finish(); return
         }
@@ -57,10 +61,15 @@ class ShareReceiverActivity : ComponentActivity() {
             }
             ClipSaveTheme(darkTheme = dark, accentColor = settings.accentColor) {
                 ConfirmDialog(
-                    url = shared,
+                    urls = shared,
                     onDownload = { format ->
-                        DownloadService.start(this, shared, format)
-                        Toast.makeText(this, "ClipSave: download queued", Toast.LENGTH_SHORT).show()
+                        shared.forEach { DownloadService.start(this, it, format) }
+                        val message = if (shared.size == 1) {
+                            "ClipSave: download queued"
+                        } else {
+                            "ClipSave: ${shared.size} downloads queued"
+                        }
+                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                         finish()
                     },
                     onCancel = { finish() }
@@ -69,43 +78,69 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun extractUrl(intent: Intent?): String? {
-        if (intent?.action != Intent.ACTION_SEND) return null
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
-        return Regex("https?://[^\\s]+").find(text)?.value?.trim()
+    private fun extractUrls(intent: Intent?): List<String> {
+        if (intent?.action != Intent.ACTION_SEND) return emptyList()
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return emptyList()
+        return UrlInputParser.parse(text).urls
     }
 }
 
 @Composable
-private fun ConfirmDialog(url: String, onDownload: (DownloadFormat) -> Unit, onCancel: () -> Unit) {
-    val platform = Platform.fromUrl(url)
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = {
+private fun ConfirmDialog(
+    urls: List<String>,
+    onDownload: (DownloadFormat) -> Unit,
+    onCancel: () -> Unit
+) {
+    val platform = urls.singleOrNull()?.let(Platform::fromUrl)
+    Dialog(onDismissRequest = onCancel) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                PlatformIcon(platform, containerSize = 36.dp, iconSize = 18.dp)
-                Spacer(Modifier.size(10.dp))
-                Text("Download from ${platform.displayName}?")
+                if (platform != null) {
+                    PlatformIcon(platform, containerSize = 36.dp, iconSize = 18.dp)
+                    Spacer(Modifier.size(10.dp))
+                }
+                Text(
+                    if (platform != null) "Download from ${platform.displayName}?"
+                    else "Queue ${urls.size} downloads?"
+                )
             }
-        },
-        text = { Text(url, maxLines = 3, overflow = TextOverflow.Ellipsis) },
-        confirmButton = {
-            Button(onClick = { onDownload(DownloadFormat.BEST) }) {
+            val preview = urls.take(3).joinToString("\n")
+            Text(
+                if (urls.size > 3) "$preview\n+${urls.size - 3} more" else preview,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = { onDownload(DownloadFormat.BEST) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = CircleShape
+            ) {
                 Icon(Icons.Filled.Download, contentDescription = null)
                 Text("  Download")
             }
-        },
-        dismissButton = {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedButton(
-                    onClick = { onDownload(DownloadFormat.AUDIO_M4A) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Filled.MusicNote, contentDescription = null)
-                    Text("  Audio only")
-                }
-                TextButton(onClick = onCancel) { Text("Cancel") }
+            FilledTonalButton(
+                onClick = { onDownload(DownloadFormat.AUDIO_M4A) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = CircleShape
+            ) {
+                Icon(Icons.Filled.MusicNote, contentDescription = null)
+                Text("  Audio only")
+            }
+            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel")
+            }
             }
         }
-    )
+    }
 }

@@ -42,15 +42,22 @@ class DownloadRepository(context: Context) {
 
     init {
         scope.launch {
-            val loaded = runCatching {
+            val persisted = runCatching {
                 if (file.exists()) json.decodeFromString<List<Download>>(file.readText())
                 else emptyList()
             }.getOrDefault(emptyList())
+            val loaded = persisted.recoverInterruptedDownloads()
             // Downloads may have been upserted before the load finished; they win.
             _downloads.update { current ->
                 val currentIds = current.map { it.id }.toSet()
                 (current + loaded.filterNot { it.id in currentIds })
                     .sortedByDescending { it.createdAt }
+            }
+            // Recovery runs before the debounced collector is guaranteed to be subscribed.
+            // Persist the repaired snapshot directly so another process death cannot resurrect
+            // stale "Downloading" rows.
+            if (loaded != persisted) {
+                runCatching { file.writeText(json.encodeToString(_downloads.value)) }
             }
         }
         @OptIn(FlowPreview::class)
@@ -92,5 +99,19 @@ class DownloadRepository(context: Context) {
     fun clearCompleted() {
         _downloads.update { list -> list.filterNot { it.status == DownloadStatus.COMPLETED } }
         schedulePersist()
+    }
+}
+
+internal fun List<Download>.recoverInterruptedDownloads(): List<Download> = map { download ->
+    if (download.status == DownloadStatus.QUEUED ||
+        download.status == DownloadStatus.EXTRACTING ||
+        download.status == DownloadStatus.DOWNLOADING
+    ) {
+        download.copy(
+            status = DownloadStatus.PAUSED,
+            errorMessage = "Interrupted before completion. Tap Resume to continue."
+        )
+    } else {
+        download
     }
 }

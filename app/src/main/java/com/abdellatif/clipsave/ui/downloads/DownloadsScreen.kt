@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,6 +48,7 @@ fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf<DownloadStatus?>(null) }
+    var confirmClearAll by remember { mutableStateOf(false) }
 
     val filtered = remember(downloads, query, filter) {
         downloads.filter { d ->
@@ -113,7 +115,7 @@ fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
                 if (downloads.any { it.status == DownloadStatus.COMPLETED }) {
                     QuietTextButton("Clear completed") { vm.clearCompleted() }
                 }
-                QuietTextButton("Clear all") { vm.clearAll() }
+                QuietTextButton("Clear all") { confirmClearAll = true }
             }
         }
 
@@ -130,10 +132,39 @@ fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(filtered, key = { it.id }) {
-                    DownloadRow(it, vm::retry, vm::delete, onOpen)
+                    DownloadRow(
+                        item = it,
+                        onRetry = vm::retry,
+                        onPause = vm::pause,
+                        onDelete = vm::delete,
+                        onOpen = onOpen
+                    )
                 }
             }
         }
+    }
+
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("Clear download history?") },
+            text = {
+                Text("Active downloads will stop. Saved media files stay on your device.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmClearAll = false
+                        vm.clearAll()
+                    }
+                ) {
+                    Text("Clear history", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

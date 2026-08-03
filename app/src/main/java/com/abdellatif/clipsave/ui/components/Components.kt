@@ -8,6 +8,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
@@ -33,11 +36,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -116,6 +123,7 @@ fun StatusBadge(status: DownloadStatus) {
         DownloadStatus.QUEUED -> "Queued" to MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.EXTRACTING -> "Extracting" to MaterialTheme.colorScheme.primary
         DownloadStatus.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
+        DownloadStatus.PAUSED -> "Paused" to MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.COMPLETED -> "Saved" to Color(0xFF3E9C5C)
         DownloadStatus.FAILED -> "Failed" to MaterialTheme.colorScheme.error
     }
@@ -157,7 +165,9 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
 }
 
 private val Download.isBusy: Boolean
-    get() = status == DownloadStatus.DOWNLOADING || status == DownloadStatus.EXTRACTING
+    get() = status == DownloadStatus.QUEUED ||
+        status == DownloadStatus.DOWNLOADING ||
+        status == DownloadStatus.EXTRACTING
 
 /**
  * Older builds saved X's Open Graph tweet-card preview when yt-dlp failed.
@@ -173,10 +183,11 @@ private val Download.isLegacyTwitterPreview: Boolean
 @Composable
 fun DownloadRow(
     item: Download,
+    modifier: Modifier = Modifier,
     onRetry: (String) -> Unit,
+    onPause: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onOpen: ((Download) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onOpen: ((Download) -> Unit)? = null
 ) {
     val playable = item.status == DownloadStatus.COMPLETED &&
         item.mediaType == MediaType.VIDEO &&
@@ -210,6 +221,8 @@ fun DownloadRow(
                         append(item.platform.displayName)
                         append(" · ")
                         append(item.mediaType.name.lowercase(Locale.US))
+                        append(" · ")
+                        append(item.format.label)
                         if (size > 0) append(" · ").append(formatBytes(size))
                     }
                     Text(
@@ -295,11 +308,17 @@ fun DownloadRow(
                 }
             }
 
-            if (item.status == DownloadStatus.FAILED && !item.errorMessage.isNullOrBlank()) {
+            if ((item.status == DownloadStatus.FAILED || item.status == DownloadStatus.PAUSED) &&
+                !item.errorMessage.isNullOrBlank()
+            ) {
                 Text(
                     text = item.errorMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (item.status == DownloadStatus.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.padding(top = 8.dp),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -312,10 +331,25 @@ fun DownloadRow(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (item.status == DownloadStatus.FAILED) {
+                    if (item.isBusy) {
                         RowAction(
-                            label = "Retry",
-                            icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                            label = "Pause",
+                            icon = { Icon(Icons.Rounded.Pause, contentDescription = null) }
+                        ) { onPause(item.id) }
+                    }
+                    if (item.status == DownloadStatus.FAILED || item.status == DownloadStatus.PAUSED) {
+                        RowAction(
+                            label = if (item.status == DownloadStatus.PAUSED) "Resume" else "Retry",
+                            icon = {
+                                Icon(
+                                    if (item.status == DownloadStatus.PAUSED) {
+                                        Icons.Rounded.PlayArrow
+                                    } else {
+                                        Icons.Rounded.Refresh
+                                    },
+                                    contentDescription = null
+                                )
+                            }
                         ) { onRetry(item.id) }
                     }
                     RowAction(
@@ -336,6 +370,13 @@ private fun RowAction(
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "rowActionPress"
+    )
     val containerColor = if (destructive) {
         MaterialTheme.colorScheme.error
     } else {
@@ -349,7 +390,15 @@ private fun RowAction(
 
     IconButton(
         onClick = onClick,
-        modifier = Modifier.padding(start = 8.dp).size(44.dp),
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .size(44.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .semantics { contentDescription = label },
+        interactionSource = interactionSource,
         colors = IconButtonDefaults.iconButtonColors(
             containerColor = containerColor,
             contentColor = contentColor

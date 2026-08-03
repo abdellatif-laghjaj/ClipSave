@@ -48,8 +48,16 @@ fun HomeScreen(
     onOpen: (Download) -> Unit
 ) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
-    val active = remember(downloads) {
+    val inProgress = remember(downloads) {
         downloads.filter {
+            it.status == DownloadStatus.DOWNLOADING ||
+                it.status == DownloadStatus.EXTRACTING ||
+                it.status == DownloadStatus.QUEUED ||
+                it.status == DownloadStatus.PAUSED
+        }
+    }
+    val activeCount = remember(downloads) {
+        downloads.count {
             it.status == DownloadStatus.DOWNLOADING ||
                 it.status == DownloadStatus.EXTRACTING ||
                 it.status == DownloadStatus.QUEUED
@@ -91,7 +99,7 @@ fun HomeScreen(
                     StatTile(
                         modifier = Modifier.weight(1f),
                         label = "Active",
-                        value = active.size.toString(),
+                        value = activeCount.toString(),
                         icon = Icons.Rounded.Downloading
                     )
                 }
@@ -107,15 +115,21 @@ fun HomeScreen(
                 }
             }
 
-            if (active.isNotEmpty()) {
+            if (inProgress.isNotEmpty()) {
                 item {
                     SectionLabel(
                         "In progress",
                         Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp)
                     )
                 }
-                items(active, key = { it.id }) {
-                    DownloadRow(it, vm::retry, vm::delete, onOpen)
+                items(inProgress, key = { it.id }) {
+                    DownloadRow(
+                        item = it,
+                        onRetry = vm::retry,
+                        onPause = vm::pause,
+                        onDelete = vm::delete,
+                        onOpen = onOpen
+                    )
                 }
             }
 
@@ -127,7 +141,13 @@ fun HomeScreen(
                     )
                 }
                 items(recent, key = { it.id }) {
-                    DownloadRow(it, vm::retry, vm::delete, onOpen)
+                    DownloadRow(
+                        item = it,
+                        onRetry = vm::retry,
+                        onPause = vm::pause,
+                        onDelete = vm::delete,
+                        onOpen = onOpen
+                    )
                 }
             }
         }

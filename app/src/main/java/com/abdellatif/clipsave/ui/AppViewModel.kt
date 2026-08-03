@@ -31,18 +31,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val settings = prefs.settings.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
 
     fun download(url: String, format: DownloadFormat = DownloadFormat.BEST) {
-        val clean = url.trim()
-        if (clean.isBlank()) return
-        DownloadService.start(getApplication(), clean, format)
+        downloadAll(listOf(url), format)
+    }
+
+    fun downloadAll(urls: List<String>, format: DownloadFormat = DownloadFormat.BEST) {
+        urls.asSequence()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .forEach { DownloadService.start(getApplication(), it, format) }
     }
 
     fun retry(id: String) {
         val item = repo.get(id) ?: return
-        val format =
-            if (item.mediaType == MediaType.AUDIO) DownloadFormat.AUDIO_M4A
-            else DownloadFormat.BEST
+        val format = when {
+            item.format.isAudio -> item.format
+            item.mediaType == MediaType.AUDIO -> DownloadFormat.AUDIO_M4A
+            else -> item.format
+        }
         DownloadService.start(getApplication(), item.url, format, retryId = id)
     }
+
+    fun pause(id: String) = DownloadService.pause(getApplication(), id)
 
     fun updateEngine(onResult: (String) -> Unit) = viewModelScope.launch {
         val msg = withContext(Dispatchers.IO) {
@@ -51,9 +61,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         onResult(msg)
     }
 
-    fun delete(id: String) = repo.remove(id)
+    fun delete(id: String) {
+        val item = repo.get(id) ?: return
+        if (item.status == com.abdellatif.clipsave.data.model.DownloadStatus.QUEUED ||
+            item.status == com.abdellatif.clipsave.data.model.DownloadStatus.EXTRACTING ||
+            item.status == com.abdellatif.clipsave.data.model.DownloadStatus.DOWNLOADING
+        ) {
+            DownloadService.remove(getApplication(), id)
+        } else {
+            repo.remove(id)
+            viewModelScope.launch(Dispatchers.IO) {
+                YtDlpEngine.cleanup(getApplication(), id)
+            }
+        }
+    }
     fun clearCompleted() = repo.clearCompleted()
-    fun clearAll() = repo.clearAll()
+    fun clearAll() = DownloadService.clearAll(getApplication())
 
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { prefs.setTheme(mode) }
     fun setAccentColor(color: AccentColor) = viewModelScope.launch { prefs.setAccentColor(color) }

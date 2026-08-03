@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.data.model.UrlInputParser
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.PlatformIcon
@@ -56,7 +58,10 @@ fun PasteUrlScreen(vm: AppViewModel) {
     var url by remember { mutableStateOf("") }
     var format by remember { mutableStateOf(DownloadFormat.BEST) }
     var confirmation by remember { mutableStateOf("") }
-    val platform = remember(url) { if (url.isBlank()) null else Platform.fromUrl(url) }
+    val parsed = remember(url) { UrlInputParser.parse(url) }
+    val platform = remember(parsed.urls) {
+        parsed.urls.singleOrNull()?.let(Platform::fromUrl)
+    }
 
     // Auto-dismiss the confirmation banner.
     LaunchedEffect(confirmation) {
@@ -76,7 +81,7 @@ fun PasteUrlScreen(vm: AppViewModel) {
         Text("New download", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Paste a link from any of 1000+ supported sites and pick a quality.",
+            "Paste one link or a batch from any of 1000+ supported sites.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -87,9 +92,9 @@ fun PasteUrlScreen(vm: AppViewModel) {
             onValueChange = { url = it },
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
-                Text("https://…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Paste one or more links", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
-            minLines = 2,
+            minLines = 3,
             shape = MaterialTheme.shapes.large,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -104,7 +109,7 @@ fun PasteUrlScreen(vm: AppViewModel) {
                     onClick = { url = readClipboard(context) },
                     modifier = Modifier
                         .padding(end = 4.dp)
-                        .size(38.dp)
+                        .size(44.dp)
                         .background(MaterialTheme.colorScheme.secondary, CircleShape)
                 ) {
                     Icon(
@@ -116,23 +121,54 @@ fun PasteUrlScreen(vm: AppViewModel) {
                 }
             }
         )
-        AnimatedVisibility(visible = platform != null, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = parsed.urls.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
             Row(
                 Modifier.padding(top = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                PlatformIcon(
-                    platform = platform ?: Platform.GENERIC,
-                    containerSize = 32.dp,
-                    iconSize = 17.dp
-                )
+                if (platform != null) {
+                    PlatformIcon(
+                        platform = platform,
+                        containerSize = 32.dp,
+                        iconSize = 17.dp
+                    )
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.PlaylistAdd,
+                            contentDescription = null,
+                            modifier = Modifier.padding(7.dp).size(18.dp)
+                        )
+                    }
+                }
                 Text(
-                    platform?.displayName.orEmpty(),
+                    when {
+                        platform != null -> platform.displayName
+                        parsed.omittedCount > 0 ->
+                            "${parsed.urls.size} links ready · ${parsed.omittedCount} omitted"
+                        else -> "${parsed.urls.size} links ready"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        AnimatedVisibility(
+            visible = url.isNotBlank() && parsed.urls.isEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Text(
+                "Add a valid http or https link to continue.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 10.dp)
+            )
         }
 
         Spacer(Modifier.height(28.dp))
@@ -153,10 +189,15 @@ fun PasteUrlScreen(vm: AppViewModel) {
 
         Spacer(Modifier.height(28.dp))
         DownloadButton(
-            enabled = url.isNotBlank(),
+            enabled = parsed.urls.isNotEmpty(),
+            label = if (parsed.urls.size <= 1) "Download" else "Queue ${parsed.urls.size} downloads",
             onClick = {
-                vm.download(url, format)
-                confirmation = "Queued · ${format.label}. Progress is on the Downloads tab."
+                vm.downloadAll(parsed.urls, format)
+                confirmation = if (parsed.urls.size == 1) {
+                    "Queued · ${format.label}. Progress is on the Downloads tab."
+                } else {
+                    "Queued ${parsed.urls.size} downloads · ${format.label}."
+                }
                 url = ""
             }
         )
@@ -182,7 +223,7 @@ fun PasteUrlScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun DownloadButton(enabled: Boolean, onClick: () -> Unit) {
+private fun DownloadButton(enabled: Boolean, label: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         enabled = enabled,
@@ -191,8 +232,7 @@ private fun DownloadButton(enabled: Boolean, onClick: () -> Unit) {
         color = if (enabled) MaterialTheme.colorScheme.secondary
         else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (enabled) MaterialTheme.colorScheme.onSecondary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        border = if (enabled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         Row(
             Modifier
@@ -207,7 +247,7 @@ private fun DownloadButton(enabled: Boolean, onClick: () -> Unit) {
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.size(8.dp))
-            Text("Download", style = MaterialTheme.typography.labelLarge)
+            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

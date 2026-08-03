@@ -72,6 +72,9 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **Share to ClipSave** — share any link from any app to download it.
 - **One-tap floating button** (Accessibility) while browsing Instagram / TikTok / X.
 - **Audio-only** extraction (m4a) for any supported video.
+- **Batch downloads** from pasted or shared text with automatic link deduplication.
+- **Pause and resume** with retained yt-dlp partial files, including process-death recovery.
+- **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
 - **Foreground service** downloads with live progress notifications.
 - **In-app video player** with seeking and 10-second skip controls.
 - **Material 3** UI with light / dark / system modes and six saved accent colors.
