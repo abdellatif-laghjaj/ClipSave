@@ -22,6 +22,7 @@ data class Settings(
     val accentColor: AccentColor = AccentColor.AMBER,
     val accessMode: AccessMode = AccessMode.NORMAL,
     val networkPolicy: NetworkPolicy = NetworkPolicy.ANY,
+    val embedSubtitles: Boolean = false,
     val onboardingDone: Boolean = false
 )
 
@@ -32,6 +33,7 @@ class UserPreferences(private val context: Context) {
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val ACCESS = stringPreferencesKey("access_mode")
         val NETWORK_POLICY = stringPreferencesKey("network_policy")
+        val EMBED_SUBTITLES = booleanPreferencesKey("embed_subtitles")
         val ONBOARDING = booleanPreferencesKey("onboarding_done")
     }
 
@@ -51,6 +53,7 @@ class UserPreferences(private val context: Context) {
             networkPolicy = runCatching {
                 NetworkPolicy.valueOf(p[Keys.NETWORK_POLICY] ?: "ANY")
             }.getOrDefault(NetworkPolicy.ANY),
+            embedSubtitles = p[Keys.EMBED_SUBTITLES] ?: false,
             onboardingDone = p[Keys.ONBOARDING] ?: false
         )
     }
@@ -69,6 +72,10 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setNetworkPolicy(policy: NetworkPolicy) {
         context.dataStore.edit { it[Keys.NETWORK_POLICY] = policy.name }
+    }
+
+    suspend fun setEmbedSubtitles(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.EMBED_SUBTITLES] = enabled }
     }
 
     suspend fun setOnboardingDone(done: Boolean) {

@@ -246,6 +246,7 @@ class DownloadService : Service() {
     }
 
     private suspend fun runDownload(request: StartRequest) {
+        val downloadSettings = prefs.settings.first()
         val platform = Platform.fromUrl(request.url)
         val notifId = request.id.hashCode() and 0xFFFF
         val baseType = if (request.format.isAudio) MediaType.AUDIO else MediaType.VIDEO
@@ -272,7 +273,8 @@ class DownloadService : Service() {
                     request.url,
                     cacheDir,
                     request.format,
-                    request.id
+                    request.id,
+                    embedSubtitles = downloadSettings.embedSubtitles
                 ) { progress ->
                     if (request.id !in pauseRequests && request.id !in removedIds) {
                         item = item.withProgress(progress)

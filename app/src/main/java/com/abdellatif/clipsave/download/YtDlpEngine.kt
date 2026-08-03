@@ -9,6 +9,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.PlaylistPreview
 import java.io.File
+import java.util.Locale
 
 /**
  * Wraps yt-dlp (via youtubedl-android). Supports 1000+ sites and merges best video+audio
@@ -118,6 +119,7 @@ object YtDlpEngine {
         parentDir: File,
         format: DownloadFormat,
         processId: String,
+        embedSubtitles: Boolean = false,
         onProgress: (DownloadProgress) -> Unit
     ): YtResult {
         if (!ensureInit(context)) {
@@ -137,6 +139,8 @@ object YtDlpEngine {
             addOption("--continue")
             addOption("--newline")
             addOption("-f", formatSelector(format))
+            addOption("--embed-metadata")
+            addOption("--embed-chapters")
             if (aria2Available) {
                 // Four conservative segments improve throughput without excessive radio, CPU, or
                 // server pressure. HLS/DASH remain on yt-dlp's native downloader for compatibility.
@@ -163,23 +167,54 @@ object YtDlpEngine {
                     "--audio-format",
                     if (format == DownloadFormat.AUDIO_MP3) "mp3" else "m4a"
                 )
+                addOption("--embed-thumbnail")
+                addOption("--convert-thumbnails", "jpg")
             } else {
                 addOption("--merge-output-format", "mp4")
+                if (embedSubtitles) {
+                    addOption("--write-subs")
+                    addOption("--write-auto-subs")
+                    addOption(
+                        "--sub-langs",
+                        MediaEmbeddingOptions.subtitleLanguages(Locale.getDefault().language)
+                    )
+                    addOption("--sub-format", "srt/best")
+                    addOption("--embed-subs")
+                    addOption("--compat-options", "no-keep-subs")
+                }
             }
         }
 
         var previous: DownloadProgress? = null
-        YoutubeDL.getInstance().execute(request, processId) { progress, eta, line ->
-            val progressLine = line.contains("[download]", ignoreCase = true) ||
-                line.trimStart().startsWith("[#") ||
-                line.trimStart().startsWith("size=")
-            if (progress >= 0f && progressLine) {
-                val snapshot = DownloadProgressParser.parse(progress, eta, line, workDir)
-                if (snapshot != previous) {
-                    previous = snapshot
-                    onProgress(snapshot)
+        try {
+            YoutubeDL.getInstance().execute(request, processId) { progress, eta, line ->
+                val progressLine = line.contains("[download]", ignoreCase = true) ||
+                    line.trimStart().startsWith("[#") ||
+                    line.trimStart().startsWith("size=")
+                if (progress >= 0f && progressLine) {
+                    val snapshot = DownloadProgressParser.parse(progress, eta, line, workDir)
+                    if (snapshot != previous) {
+                        previous = snapshot
+                        onProgress(snapshot)
+                    }
                 }
             }
+        } catch (error: Exception) {
+            val subtitleFailure = error.message.orEmpty().contains("subtitle", ignoreCase = true) ||
+                error.message.orEmpty().contains("caption", ignoreCase = true)
+            if (embedSubtitles && subtitleFailure) {
+                Log.w(TAG, "Subtitle embedding failed; retrying media without captions", error)
+                return download(
+                    context = context,
+                    url = url,
+                    parentDir = parentDir,
+                    format = format,
+                    processId = processId,
+                    embedSubtitles = false,
+                    onProgress = onProgress
+                )
+            }
+            throw error
         }
 
         // The merged video (or the extracted audio) is the largest file in the work dir.

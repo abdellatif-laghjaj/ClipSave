@@ -78,6 +78,8 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
 - **Accelerated transfers** with four conservative aria2 segments where the source supports them.
 - **Live transfer details** with downloaded size, total size, speed, percentage, and ETA.
+- **Embedded media details** with chapters and metadata, plus cover art for extracted audio.
+- **Optional embedded subtitles** in the device language with English fallback.
 - **Unmetered-only mode** that waits on costly networks and resumes automatically when eligible.
 - **Foreground service** downloads with live progress and open/share completion actions.
 - **In-app media viewer** for video, audio, and images with seeking and 10-second skip controls.

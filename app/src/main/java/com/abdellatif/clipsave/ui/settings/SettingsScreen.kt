@@ -72,6 +72,9 @@ fun SettingsScreen(vm: AppViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     var engineMsg by remember { mutableStateOf("") }
     var updating by remember { mutableStateOf(false) }
+    val captionLanguage = remember {
+        Locale.getDefault().displayLanguage.takeIf(String::isNotBlank) ?: "English"
+    }
 
     Column(
         Modifier
@@ -158,6 +161,38 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
                 Switch(
                     checked = settings.networkPolicy == NetworkPolicy.UNMETERED_ONLY,
+                    onCheckedChange = null
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = settings.embedSubtitles,
+                        role = Role.Switch,
+                        onValueChange = vm::setEmbedSubtitles
+                    )
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        "Embed available subtitles",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        if (Locale.getDefault().language.equals("en", ignoreCase = true)) {
+                            "Adds available English captions to downloaded videos."
+                        } else {
+                            "Adds available $captionLanguage captions, with English fallback."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = settings.embedSubtitles,
                     onCheckedChange = null
                 )
             }

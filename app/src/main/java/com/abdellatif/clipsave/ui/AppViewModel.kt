@@ -164,6 +164,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setAccessMode(mode: AccessMode) = viewModelScope.launch { prefs.setAccessMode(mode) }
     fun setNetworkPolicy(policy: NetworkPolicy) =
         viewModelScope.launch { prefs.setNetworkPolicy(policy) }
+    fun setEmbedSubtitles(enabled: Boolean) =
+        viewModelScope.launch { prefs.setEmbedSubtitles(enabled) }
     fun completeOnboarding() = viewModelScope.launch { prefs.setOnboardingDone(true) }
 
     override fun onCleared() {
