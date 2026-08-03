@@ -1,7 +1,10 @@
 package com.abdellatif.clipsave.ui.paste
 
+import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,6 +48,7 @@ import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.data.model.UrlInputParser
+import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.AppViewModel
 import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.PlatformIcon
@@ -58,9 +62,34 @@ fun PasteUrlScreen(vm: AppViewModel) {
     var url by remember { mutableStateOf("") }
     var format by remember { mutableStateOf(DownloadFormat.BEST) }
     var confirmation by remember { mutableStateOf("") }
+    var pendingDownload by remember {
+        mutableStateOf<Pair<List<String>, DownloadFormat>?>(null)
+    }
     val parsed = remember(url) { UrlInputParser.parse(url) }
     val platform = remember(parsed.urls) {
         parsed.urls.singleOrNull()?.let(Platform::fromUrl)
+    }
+
+    fun queueDownloads(urls: List<String>, selectedFormat: DownloadFormat) {
+        vm.downloadAll(urls, selectedFormat)
+        confirmation = if (urls.size == 1) {
+            "Queued · ${selectedFormat.label}. Progress is on the Downloads tab."
+        } else {
+            "Queued ${urls.size} downloads · ${selectedFormat.label}."
+        }
+        url = ""
+    }
+
+    val storagePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val pending = pendingDownload
+        pendingDownload = null
+        if (granted && pending != null) {
+            queueDownloads(pending.first, pending.second)
+        } else if (!granted) {
+            confirmation = "Storage access is required to save files on Android 8 and 9."
+        }
     }
 
     // Auto-dismiss the confirmation banner.
@@ -192,13 +221,13 @@ fun PasteUrlScreen(vm: AppViewModel) {
             enabled = parsed.urls.isNotEmpty(),
             label = if (parsed.urls.size <= 1) "Download" else "Queue ${parsed.urls.size} downloads",
             onClick = {
-                vm.downloadAll(parsed.urls, format)
-                confirmation = if (parsed.urls.size == 1) {
-                    "Queued · ${format.label}. Progress is on the Downloads tab."
+                val request = parsed.urls to format
+                if (FileSaver.needsLegacyStoragePermission(context)) {
+                    pendingDownload = request
+                    storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 } else {
-                    "Queued ${parsed.urls.size} downloads · ${format.label}."
+                    queueDownloads(request.first, request.second)
                 }
-                url = ""
             }
         )
 

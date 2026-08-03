@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewModelScope
 import com.abdellatif.clipsave.ClipSaveApp
 import com.abdellatif.clipsave.data.model.DownloadFormat
+import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
 import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
@@ -15,8 +16,12 @@ import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.DownloadService
 import com.abdellatif.clipsave.download.YtDlpEngine
+import com.abdellatif.clipsave.media.SavedMediaManager
+import com.abdellatif.clipsave.notif.NotificationHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,7 +33,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = container.userPreferences
 
     val downloads = repo.downloads
+    val downloadsLoaded = repo.loaded
     val settings = prefs.settings.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages = _messages.asSharedFlow()
 
     fun download(url: String, format: DownloadFormat = DownloadFormat.BEST) {
         downloadAll(listOf(url), format)
@@ -63,11 +71,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun delete(id: String) {
         val item = repo.get(id) ?: return
-        if (item.status == com.abdellatif.clipsave.data.model.DownloadStatus.QUEUED ||
-            item.status == com.abdellatif.clipsave.data.model.DownloadStatus.EXTRACTING ||
-            item.status == com.abdellatif.clipsave.data.model.DownloadStatus.DOWNLOADING
+        if (item.status == DownloadStatus.QUEUED ||
+            item.status == DownloadStatus.EXTRACTING ||
+            item.status == DownloadStatus.DOWNLOADING
         ) {
             DownloadService.remove(getApplication(), id)
+        } else if (item.status == DownloadStatus.COMPLETED) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val result = SavedMediaManager.delete(getApplication(), item)
+                if (result.removeHistory) {
+                    repo.remove(id)
+                    NotificationHelper.cancelDone(getApplication(), id)
+                    YtDlpEngine.cleanup(getApplication(), id)
+                }
+                _messages.emit(result.message)
+            }
         } else {
             repo.remove(id)
             viewModelScope.launch(Dispatchers.IO) {

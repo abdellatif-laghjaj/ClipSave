@@ -420,7 +420,8 @@ class DownloadService : Service() {
             notifId,
             completed.title.ifBlank { completed.platform.displayName },
             true,
-            "Saved to Download/${FileSaver.SUBDIR}/"
+            "Saved to Download/${FileSaver.SUBDIR}/",
+            completed
         )
     }
 

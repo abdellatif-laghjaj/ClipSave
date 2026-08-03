@@ -25,18 +25,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -187,13 +193,20 @@ fun DownloadRow(
     onRetry: (String) -> Unit,
     onPause: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onShare: ((Download) -> Unit)? = null,
     onOpen: ((Download) -> Unit)? = null
 ) {
-    val playable = item.status == DownloadStatus.COMPLETED &&
-        item.mediaType == MediaType.VIDEO &&
+    var confirmFileDelete by remember(item.id) { mutableStateOf(false) }
+    val openable = item.status == DownloadStatus.COMPLETED &&
+        (item.mediaType == MediaType.VIDEO ||
+            item.mediaType == MediaType.AUDIO ||
+            item.mediaType == MediaType.IMAGE) &&
         !item.localUri.isNullOrBlank() &&
         onOpen != null
-    val contentModifier = if (playable) {
+    val shareable = item.status == DownloadStatus.COMPLETED &&
+        !item.localUri.isNullOrBlank() &&
+        onShare != null
+    val contentModifier = if (openable) {
         Modifier.clickable(role = Role.Button) { onOpen?.invoke(item) }
     } else {
         Modifier
@@ -245,38 +258,48 @@ fun DownloadRow(
                         }
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                if (playable) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ) {
-                        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                contentDescription = "Play ${
-                                    item.title.ifBlank { item.fileName.ifBlank { "video" } }
-                                }",
-                                modifier = Modifier.padding(start = 2.dp).size(23.dp)
-                            )
-                        }
-                    }
-                }
-                if (item.status == DownloadStatus.COMPLETED) {
+            }
+
+            if (item.status == DownloadStatus.COMPLETED) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (item.isLegacyTwitterPreview) {
                         RowAction(
                             label = "Retry media extraction",
                             icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
                         ) { onRetry(item.id) }
                     }
+                    if (openable) {
+                        RowAction(
+                            label = if (item.mediaType == MediaType.IMAGE) "View" else "Play",
+                            emphasized = true,
+                            opticalPlayOffset = item.mediaType != MediaType.IMAGE,
+                            icon = {
+                                Icon(
+                                    if (item.mediaType == MediaType.IMAGE) {
+                                        Icons.Rounded.OpenInFull
+                                    } else {
+                                        Icons.Rounded.PlayArrow
+                                    },
+                                    contentDescription = null
+                                )
+                            }
+                        ) { onOpen?.invoke(item) }
+                    }
+                    if (shareable) {
+                        RowAction(
+                            label = "Share",
+                            icon = { Icon(Icons.Rounded.Share, contentDescription = null) }
+                        ) { onShare?.invoke(item) }
+                    }
                     RowAction(
-                        label = "Remove",
+                        label = "Delete file",
                         destructive = true,
                         icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
-                    ) { onDelete(item.id) }
-                } else {
-                    StatusBadge(item.status)
+                    ) { confirmFileDelete = true }
                 }
             }
 
@@ -361,12 +384,37 @@ fun DownloadRow(
             }
         }
     }
+
+    if (confirmFileDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmFileDelete = false },
+            title = { Text("Delete saved file?") },
+            text = {
+                Text("This permanently deletes the media from your device and removes its download history.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmFileDelete = false
+                        onDelete(item.id)
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmFileDelete = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
 private fun RowAction(
     label: String,
     destructive: Boolean = false,
+    emphasized: Boolean = false,
+    opticalPlayOffset: Boolean = false,
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
@@ -379,11 +427,15 @@ private fun RowAction(
     )
     val containerColor = if (destructive) {
         MaterialTheme.colorScheme.error
+    } else if (emphasized) {
+        MaterialTheme.colorScheme.secondary
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = if (destructive) {
         MaterialTheme.colorScheme.onError
+    } else if (emphasized) {
+        MaterialTheme.colorScheme.onSecondary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -404,7 +456,12 @@ private fun RowAction(
             contentColor = contentColor
         )
     ) {
-        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(20.dp)
+                .padding(start = if (opticalPlayOffset) 2.dp else 0.dp),
+            contentAlignment = Alignment.Center
+        ) {
             icon()
         }
     }

@@ -1,5 +1,6 @@
 package com.abdellatif.clipsave.download
 
+import com.abdellatif.clipsave.data.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -27,5 +28,13 @@ class FileSaverTest {
 
         assertEquals(180, name.length)
         assertEquals(true, name.endsWith(".webm"))
+    }
+
+    @Test
+    fun `maps share mime types from saved media containers`() {
+        assertEquals("video/webm", FileSaver.mimeFor(MediaType.VIDEO, "webm"))
+        assertEquals("audio/mp4", FileSaver.mimeFor(MediaType.AUDIO, ".m4a"))
+        assertEquals("audio/mpeg", FileSaver.mimeFor(MediaType.AUDIO, "mp3"))
+        assertEquals("image/webp", FileSaver.mimeFor(MediaType.IMAGE, "webp"))
     }
 }

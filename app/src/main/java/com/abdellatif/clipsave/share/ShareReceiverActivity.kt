@@ -1,9 +1,11 @@
 package com.abdellatif.clipsave.share
 
+import android.Manifest
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -38,17 +40,34 @@ import com.abdellatif.clipsave.data.preferences.Settings
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.download.DownloadService
+import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
 
 class ShareReceiverActivity : ComponentActivity() {
 
     private val userPreferences by lazy { UserPreferences(applicationContext) }
+    private var sharedUrls: List<String> = emptyList()
+    private var pendingFormat: DownloadFormat? = null
+    private val requestLegacyStorage =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val format = pendingFormat
+            pendingFormat = null
+            if (granted && format != null) {
+                queueSharedDownloads(format)
+            } else if (!granted) {
+                Toast.makeText(
+                    this,
+                    "Storage access is required to save files on Android 8 and 9.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val shared = extractUrls(intent)
-        if (shared.isEmpty()) {
+        sharedUrls = extractUrls(intent)
+        if (sharedUrls.isEmpty()) {
             Toast.makeText(this, "No link found in shared text.", Toast.LENGTH_SHORT).show()
             finish(); return
         }
@@ -61,21 +80,30 @@ class ShareReceiverActivity : ComponentActivity() {
             }
             ClipSaveTheme(darkTheme = dark, accentColor = settings.accentColor) {
                 ConfirmDialog(
-                    urls = shared,
+                    urls = sharedUrls,
                     onDownload = { format ->
-                        shared.forEach { DownloadService.start(this, it, format) }
-                        val message = if (shared.size == 1) {
-                            "ClipSave: download queued"
+                        if (FileSaver.needsLegacyStoragePermission(this)) {
+                            pendingFormat = format
+                            requestLegacyStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                         } else {
-                            "ClipSave: ${shared.size} downloads queued"
+                            queueSharedDownloads(format)
                         }
-                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-                        finish()
                     },
                     onCancel = { finish() }
                 )
             }
         }
+    }
+
+    private fun queueSharedDownloads(format: DownloadFormat) {
+        sharedUrls.forEach { DownloadService.start(this, it, format) }
+        val message = if (sharedUrls.size == 1) {
+            "ClipSave: download queued"
+        } else {
+            "ClipSave: ${sharedUrls.size} downloads queued"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        finish()
     }
 
     private fun extractUrls(intent: Intent?): List<String> {
@@ -143,4 +171,5 @@ private fun ConfirmDialog(
             }
         }
     }
+
 }

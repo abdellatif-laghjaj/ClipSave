@@ -35,6 +35,9 @@ class DownloadRepository(context: Context) {
     private val _downloads = MutableStateFlow<List<Download>>(emptyList())
     val downloads: StateFlow<List<Download>> = _downloads.asStateFlow()
 
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
     private val persistRequests = MutableSharedFlow<Unit>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
@@ -59,6 +62,7 @@ class DownloadRepository(context: Context) {
             if (loaded != persisted) {
                 runCatching { file.writeText(json.encodeToString(_downloads.value)) }
             }
+            _loaded.value = true
         }
         @OptIn(FlowPreview::class)
         scope.launch {

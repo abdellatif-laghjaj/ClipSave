@@ -45,7 +45,8 @@ import com.abdellatif.clipsave.ui.components.SectionLabel
 fun HomeScreen(
     vm: AppViewModel,
     onGoToPaste: () -> Unit,
-    onOpen: (Download) -> Unit
+    onOpen: (Download) -> Unit,
+    onShare: (Download) -> Unit
 ) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val inProgress = remember(downloads) {
@@ -128,6 +129,7 @@ fun HomeScreen(
                         onRetry = vm::retry,
                         onPause = vm::pause,
                         onDelete = vm::delete,
+                        onShare = onShare,
                         onOpen = onOpen
                     )
                 }
@@ -146,6 +148,7 @@ fun HomeScreen(
                         onRetry = vm::retry,
                         onPause = vm::pause,
                         onDelete = vm::delete,
+                        onShare = onShare,
                         onOpen = onOpen
                     )
                 }

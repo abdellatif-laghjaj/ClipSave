@@ -75,10 +75,12 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **Batch downloads** from pasted or shared text with automatic link deduplication.
 - **Pause and resume** with retained yt-dlp partial files, including process-death recovery.
 - **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
-- **Foreground service** downloads with live progress notifications.
-- **In-app video player** with seeking and 10-second skip controls.
+- **Foreground service** downloads with live progress and open/share completion actions.
+- **In-app media viewer** for video, audio, and images with seeking and 10-second skip controls.
+- **Secure saved-media sharing** through temporary Android content-URI permissions.
+- **Truthful file management** with confirmed deletion from both device storage and history.
 - **Material 3** UI with light / dark / system modes and six saved accent colors.
-- **Downloads manager**: search, filter, retry failed, delete, clear.
+- **Downloads manager**: search, filter, pause/resume, retry, open, share, delete, and clear.
 - Saves through **MediaStore** — no storage permission needed on Android 10+.
 - **Shizuku / root status** surfaced in Settings (downloads need neither).
 

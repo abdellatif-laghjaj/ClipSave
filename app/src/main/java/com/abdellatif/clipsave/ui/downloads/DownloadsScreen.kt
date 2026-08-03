@@ -44,7 +44,11 @@ import com.abdellatif.clipsave.ui.components.MinimalChip
 import java.util.Locale
 
 @Composable
-fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
+fun DownloadsScreen(
+    vm: AppViewModel,
+    onOpen: (Download) -> Unit,
+    onShare: (Download) -> Unit
+) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf<DownloadStatus?>(null) }
@@ -137,6 +141,7 @@ fun DownloadsScreen(vm: AppViewModel, onOpen: (Download) -> Unit) {
                         onRetry = vm::retry,
                         onPause = vm::pause,
                         onDelete = vm::delete,
+                        onShare = onShare,
                         onOpen = onOpen
                     )
                 }

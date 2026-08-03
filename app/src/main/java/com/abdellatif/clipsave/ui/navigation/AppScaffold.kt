@@ -1,5 +1,6 @@
 package com.abdellatif.clipsave.ui.navigation
 
+import android.content.Intent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -19,13 +20,18 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +50,11 @@ import com.abdellatif.clipsave.ui.home.HomeScreen
 import com.abdellatif.clipsave.ui.paste.PasteUrlScreen
 import com.abdellatif.clipsave.ui.player.VideoPlayerScreen
 import com.abdellatif.clipsave.ui.settings.SettingsScreen
+import com.abdellatif.clipsave.data.model.Download
+import com.abdellatif.clipsave.data.model.DownloadStatus
+import com.abdellatif.clipsave.data.model.MediaType
+import com.abdellatif.clipsave.media.SavedMediaManager
+import kotlinx.coroutines.launch
 
 private enum class Tab(val route: String, val label: String, val icon: Int) {
     HOME("home", "Home", R.drawable.home),
@@ -53,10 +64,19 @@ private enum class Tab(val route: String, val label: String, val icon: Int) {
 }
 
 @Composable
-fun AppScaffold(vm: AppViewModel) {
+fun AppScaffold(
+    vm: AppViewModel,
+    launchRequest: AppLaunchRequest? = null,
+    onLaunchRequestConsumed: (AppLaunchRequest) -> Unit = {}
+) {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val current = backStack?.destination
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val downloadsLoaded by vm.downloadsLoaded.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // All top-level moves (tabs AND in-screen shortcuts like the Home FAB) must use this
     // single pattern. A plain navigate() would push a duplicate destination; popping it
@@ -76,8 +96,47 @@ fun AppScaffold(vm: AppViewModel) {
         }
     }
 
+    fun shareMedia(download: Download) {
+        SavedMediaManager.buildShareIntent(context, download)
+            .onSuccess { shareIntent ->
+                runCatching {
+                    context.startActivity(Intent.createChooser(shareIntent, "Share saved media"))
+                }.onFailure {
+                    scope.launch { snackbarHostState.showSnackbar("No app can share this file.") }
+                }
+            }
+            .onFailure { error ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        error.message ?: "Saved file is no longer available."
+                    )
+                }
+            }
+    }
+
+    LaunchedEffect(vm) {
+        vm.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
+
+    LaunchedEffect(launchRequest?.key, downloadsLoaded, downloads) {
+        val request = launchRequest ?: return@LaunchedEffect
+        if (!downloadsLoaded) return@LaunchedEffect
+        val item = request.downloadId?.let { id -> downloads.firstOrNull { it.id == id } }
+        if (!request.showDownloads && item != null &&
+            item.status == DownloadStatus.COMPLETED &&
+            item.mediaType != MediaType.UNKNOWN &&
+            !item.localUri.isNullOrBlank()
+        ) {
+            openPlayer(item.id)
+        } else {
+            navigateToTab(Tab.DOWNLOADS)
+        }
+        onLaunchRequestConsumed(request)
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (current?.route in Tab.entries.map { it.route }) {
                 MinimalNavBar(
@@ -102,11 +161,16 @@ fun AppScaffold(vm: AppViewModel) {
                 HomeScreen(
                     vm,
                     onGoToPaste = { navigateToTab(Tab.PASTE) },
-                    onOpen = { openPlayer(it.id) }
+                    onOpen = { openPlayer(it.id) },
+                    onShare = ::shareMedia
                 )
             }
             composable(Tab.DOWNLOADS.route) {
-                DownloadsScreen(vm, onOpen = { openPlayer(it.id) })
+                DownloadsScreen(
+                    vm,
+                    onOpen = { openPlayer(it.id) },
+                    onShare = ::shareMedia
+                )
             }
             composable(Tab.PASTE.route) { PasteUrlScreen(vm) }
             composable(Tab.SETTINGS.route) { SettingsScreen(vm) }
@@ -118,7 +182,11 @@ fun AppScaffold(vm: AppViewModel) {
                 val id = entry.arguments?.getString("downloadId")
                 val item = downloads.firstOrNull { it.id == id }
                 if (item != null) {
-                    VideoPlayerScreen(item, onBack = navController::navigateUp)
+                    VideoPlayerScreen(
+                        item,
+                        onBack = navController::navigateUp,
+                        onShare = { shareMedia(item) }
+                    )
                 }
             }
         }
