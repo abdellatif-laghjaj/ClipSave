@@ -1,11 +1,15 @@
 package com.abdellatif.clipsave.download
 
+import android.Manifest
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import com.abdellatif.clipsave.data.model.MediaType
 import java.io.File
 import java.io.FileInputStream
@@ -14,6 +18,13 @@ import java.io.FileInputStream
 object FileSaver {
 
     const val SUBDIR = "ClipSave"
+
+    fun needsLegacyStoragePermission(context: Context): Boolean =
+        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
 
     fun mimeFor(mediaType: MediaType, ext: String): String {
         val e = ext.lowercase().removePrefix(".")
@@ -44,6 +55,9 @@ object FileSaver {
         displayName: String,
         mediaType: MediaType
     ): String {
+        check(!needsLegacyStoragePermission(context)) {
+            "Storage access is required to save files on Android 8 and 9."
+        }
         val ext = source.extension.ifBlank { defaultExt(mediaType) }
         val safeName = safeDisplayName(displayName, ext)
         val mime = mimeFor(mediaType, ext)
@@ -55,6 +69,7 @@ object FileSaver {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveViaMediaStore(
         context: Context,
         source: File,
@@ -71,13 +86,20 @@ object FileSaver {
         }
         val uri: Uri = resolver.insert(collection, values)
             ?: throw IllegalStateException("Could not create MediaStore entry.")
-        resolver.openOutputStream(uri)?.use { out ->
-            FileInputStream(source).use { it.copyTo(out, 64 * 1024) }
-        } ?: throw IllegalStateException("Could not open output stream.")
-        values.clear()
-        values.put(MediaStore.Downloads.IS_PENDING, 0)
-        resolver.update(uri, values, null, null)
-        return uri.toString()
+        return try {
+            resolver.openOutputStream(uri)?.use { out ->
+                FileInputStream(source).use { it.copyTo(out, 64 * 1024) }
+            } ?: throw IllegalStateException("Could not open output stream.")
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            check(resolver.update(uri, values, null, null) > 0) {
+                "Could not publish the saved file."
+            }
+            uri.toString()
+        } catch (error: Throwable) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw error
+        }
     }
 
     private fun saveLegacy(source: File, name: String): String {

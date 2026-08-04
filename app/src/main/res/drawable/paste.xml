@@ -4,28 +4,14 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
   <path
-      android:pathData="M19.502,13H10.502"
+      android:pathData="M4,10L4,14.544C4,17.789 4,19.412 4.886,20.511C5.065,20.733 5.267,20.935 5.489,21.114C6.588,22 8.211,22 11.456,22C12.161,22 12.514,22 12.837,21.886C12.904,21.862 12.97,21.835 13.035,21.804C13.344,21.656 13.593,21.407 14.092,20.908L18.828,16.172C19.406,15.594 19.695,15.304 19.848,14.937C20,14.569 20,14.161 20,13.343V10C20,6.229 20,4.343 18.828,3.172C17.657,2 15.771,2 12,2M13,21.5V21C13,18.172 13,16.757 13.879,15.879C14.757,15 16.171,15 19,15H19.5"
       android:strokeLineJoin="round"
       android:strokeWidth="1.5"
       android:fillColor="#00000000"
       android:strokeColor="#ffffff"
       android:strokeLineCap="round"/>
   <path
-      android:pathData="M17.502,10C17.502,10 20.502,12.21 20.502,13C20.502,13.791 17.502,16 17.502,16"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.5"
-      android:fillColor="#00000000"
-      android:strokeColor="#ffffff"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M13.998,2H8.998C8.17,2 7.498,2.672 7.498,3.5C7.498,4.329 8.17,5 8.998,5H13.998C14.826,5 15.498,4.329 15.498,3.5C15.498,2.672 14.826,2 13.998,2Z"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.5"
-      android:fillColor="#00000000"
-      android:strokeColor="#ffffff"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M15.498,3.5C17.052,3.547 17.978,3.721 18.619,4.362C19.191,4.934 19.391,5.733 19.461,7M7.498,3.5C5.945,3.547 5.018,3.721 4.377,4.362C3.498,5.241 3.498,6.655 3.498,9.483L3.498,16C3.498,18.828 3.498,20.243 4.377,21.121C5.255,22 6.67,22 9.498,22L13.498,22C16.326,22 17.741,22 18.619,21.121C19.109,20.632 19.326,19.975 19.422,19"
+      android:pathData="M7,8C6.393,7.41 4,5.84 4,5C4,4.16 6.393,2.59 7,2M4.5,5H7C8.869,5 9.804,5 10.5,5.402C10.956,5.665 11.335,6.044 11.598,6.5C12,7.196 12,8.131 12,10"
       android:strokeLineJoin="round"
       android:strokeWidth="1.5"
       android:fillColor="#00000000"

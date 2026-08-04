@@ -3,6 +3,8 @@ package com.abdellatif.clipsave.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,12 +28,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abdellatif.clipsave.BuildConfig
 import com.abdellatif.clipsave.data.preferences.AccentColor
 import com.abdellatif.clipsave.data.preferences.AccessMode
+import com.abdellatif.clipsave.data.preferences.NetworkPolicy
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.YtDlpEngine
 import com.abdellatif.clipsave.privileged.RootHelper
@@ -67,8 +73,16 @@ import androidx.core.net.toUri
 fun SettingsScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val cookieStatus by vm.cookieStatus.collectAsStateWithLifecycle()
+    val cookiePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) vm.importCookies(uri)
+    }
     var engineMsg by remember { mutableStateOf("") }
     var updating by remember { mutableStateOf(false) }
+    val currentLocale = LocalConfiguration.current.locales[0]
+    val captionLanguage = currentLocale.displayLanguage.takeIf(String::isNotBlank) ?: "English"
 
     Column(
         Modifier
@@ -126,6 +140,78 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
 
+        SettingsGroup("Downloads") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = settings.networkPolicy == NetworkPolicy.UNMETERED_ONLY,
+                        role = Role.Switch,
+                        onValueChange = { enabled ->
+                            vm.setNetworkPolicy(
+                                if (enabled) NetworkPolicy.UNMETERED_ONLY else NetworkPolicy.ANY
+                            )
+                        }
+                    )
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        "Unmetered downloads only",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        "Waits on mobile data or metered Wi-Fi, then resumes automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = settings.networkPolicy == NetworkPolicy.UNMETERED_ONLY,
+                    onCheckedChange = null
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = settings.embedSubtitles,
+                        role = Role.Switch,
+                        onValueChange = vm::setEmbedSubtitles
+                    )
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        "Embed available subtitles",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        if (currentLocale.language.equals("en", ignoreCase = true)) {
+                            "Adds available English captions to downloaded videos."
+                        } else {
+                            "Adds available $captionLanguage captions, with English fallback."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = settings.embedSubtitles,
+                    onCheckedChange = null
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Text(
+                "ClipSave runs up to two downloads at once and uses four efficient segments when supported.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         SettingsGroup("Download engine") {
             Text(
                 "yt-dlp powers downloads from 1000+ sites. Keep it updated so site changes keep working.",
@@ -154,6 +240,37 @@ fun SettingsScreen(vm: AppViewModel) {
                     engineMsg,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        SettingsGroup("Site access") {
+            Text(
+                "Import cookies only for media you are allowed to access. The file stays in ClipSave's private storage and is excluded from backups.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                if (cookieStatus.configured) {
+                    val siteLabel = if (cookieStatus.domainCount == 1) "site" else "sites"
+                    "Ready · ${cookieStatus.cookieCount} cookies across ${cookieStatus.domainCount} $siteLabel"
+                } else {
+                    "No cookies imported"
+                },
+                style = MaterialTheme.typography.titleSmall
+            )
+            PillButton(
+                label = if (cookieStatus.configured) "Replace cookies.txt" else "Import cookies.txt",
+                enabled = !cookieStatus.isWorking,
+                loading = cookieStatus.isWorking,
+                onClick = { cookiePicker.launch(arrayOf("text/plain", "*/*")) }
+            )
+            if (cookieStatus.configured) {
+                PillButton(
+                    label = "Remove saved cookies",
+                    enabled = !cookieStatus.isWorking,
+                    danger = true,
+                    onClick = vm::removeCookies
                 )
             }
         }
@@ -299,6 +416,7 @@ private fun PillButton(
     label: String,
     enabled: Boolean = true,
     loading: Boolean = false,
+    danger: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
@@ -307,7 +425,8 @@ private fun PillButton(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        contentColor = if (danger) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurface
     ) {
         Row(
             Modifier

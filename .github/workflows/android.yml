@@ -23,6 +23,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -30,6 +33,9 @@ jobs:
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
+
+      - name: Run unit tests and lint
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon --stacktrace
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
@@ -46,7 +52,7 @@ jobs:
 
       - name: Check for signing secrets
         id: keycheck
-        run: echo "available=${{ secrets.KEYSTORE_BASE64 != '' }}" >> "$GITHUB_OUTPUT"
+        run: echo "available=${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEY_ALIAS != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
 
       - name: Sign release APK
         id: sign
@@ -59,19 +65,29 @@ jobs:
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
-          BUILD_TOOLS_VERSION: "35.0.0"
+          BUILD_TOOLS_VERSION: "36.0.0"
 
-      - name: Upload unsigned release APK
+      - name: Prepare unsigned release APKs
         if: steps.keycheck.outputs.available != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipSave-release-unsigned
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+        run: |
+          mkdir -p app/build/publish
+          cp app/build/outputs/apk/release/*.apk app/build/publish/
 
-      - name: Upload signed release APK
-        if: steps.sign.outputs.signedReleaseFile != ''
+      - name: Prepare signed release APKs
+        if: steps.keycheck.outputs.available == 'true'
+        env:
+          SIGNED_RELEASE_FILES: ${{ steps.sign.outputs.signedReleaseFiles }}
+        run: |
+          mkdir -p app/build/publish
+          IFS=':' read -ra files <<< "$SIGNED_RELEASE_FILES"
+          for file in "${files[@]}"; do
+            test -n "$file"
+            cp "$file" app/build/publish/
+          done
+
+      - name: Upload release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: ClipSave-release-signed
-          path: ${{ steps.sign.outputs.signedReleaseFile }}
+          name: ClipSave-release
+          path: app/build/publish/*.apk
+          if-no-files-found: error

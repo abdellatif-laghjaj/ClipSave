@@ -22,26 +22,54 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.abdellatif.clipsave.data.model.DownloadFormat
+import com.abdellatif.clipsave.data.model.CollectionUrlDetector
 import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.data.preferences.ThemeMode
 import com.abdellatif.clipsave.download.DownloadService
+import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.navigation.AppScaffold
+import com.abdellatif.clipsave.ui.navigation.AppLaunchRequest
 import com.abdellatif.clipsave.ui.onboarding.OnboardingScreen
 import com.abdellatif.clipsave.ui.theme.ClipSaveTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
 
     private val requestNotif =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val requestLegacyStorage =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val url = pendingLegacyQuickGrab
+            pendingLegacyQuickGrab = null
+            if (granted && url != null) {
+                queueQuickGrab(url)
+            } else if (!granted) {
+                Toast.makeText(
+                    this,
+                    "Storage access is required to save files on Android 8 and 9.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
     private var pendingQuickGrab = false
+    private var pendingLegacyQuickGrab: String? = null
+    private val launchRequest = MutableStateFlow<AppLaunchRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         maybeRequestNotifications()
-        setContent { ClipSaveRoot() }
+        setContent {
+            val request by launchRequest.collectAsState()
+            ClipSaveRoot(
+                launchRequest = request,
+                onLaunchRequestConsumed = { consumed ->
+                    if (launchRequest.value?.key == consumed.key) launchRequest.value = null
+                }
+            )
+        }
         handleIntent(intent)
     }
 
@@ -57,8 +85,34 @@ class MainActivity : ComponentActivity() {
      * so on a cold start we defer the grab until focus arrives.
      */
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action != ACTION_QUICK_GRAB) return
-        if (hasWindowFocus()) performQuickGrab() else pendingQuickGrab = true
+        when (intent?.action) {
+            ACTION_QUICK_GRAB -> {
+                if (hasWindowFocus()) performQuickGrab() else pendingQuickGrab = true
+            }
+
+            ACTION_OPEN_DOWNLOAD -> {
+                launchRequest.value = AppLaunchRequest(
+                    key = System.nanoTime(),
+                    downloadId = intent.getStringExtra(EXTRA_DOWNLOAD_ID)
+                )
+            }
+
+            ACTION_SHOW_DOWNLOADS -> {
+                launchRequest.value = AppLaunchRequest(
+                    key = System.nanoTime(),
+                    showDownloads = true
+                )
+            }
+
+            ACTION_REVIEW_URL -> {
+                intent.getStringExtra(EXTRA_URL)?.takeIf(String::isNotBlank)?.let { url ->
+                    launchRequest.value = AppLaunchRequest(
+                        key = System.nanoTime(),
+                        newDownloadUrl = url
+                    )
+                }
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -72,12 +126,14 @@ class MainActivity : ComponentActivity() {
     private fun performQuickGrab() {
         val clip = readClipboardUrl()
         if (clip != null) {
-            DownloadService.start(this, clip, DownloadFormat.BEST)
-            Toast.makeText(
-                this,
-                "Downloading from ${Platform.fromUrl(clip).displayName}…",
-                Toast.LENGTH_LONG
-            ).show()
+            if (CollectionUrlDetector.isLikelyCollection(clip)) {
+                queueQuickGrab(clip)
+            } else if (FileSaver.needsLegacyStoragePermission(this)) {
+                pendingLegacyQuickGrab = clip
+                requestLegacyStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            } else {
+                queueQuickGrab(clip)
+            }
         } else {
             Toast.makeText(
                 this,
@@ -85,6 +141,23 @@ class MainActivity : ComponentActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    private fun queueQuickGrab(url: String) {
+        if (CollectionUrlDetector.isLikelyCollection(url)) {
+            launchRequest.value = AppLaunchRequest(
+                key = System.nanoTime(),
+                newDownloadUrl = url
+            )
+            Toast.makeText(this, "Choose the playlist items to download.", Toast.LENGTH_LONG).show()
+            return
+        }
+        DownloadService.start(this, url, DownloadFormat.BEST)
+        Toast.makeText(
+            this,
+            "Downloading from ${Platform.fromUrl(url).displayName}…",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun readClipboardUrl(): String? {
@@ -101,11 +174,19 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val ACTION_QUICK_GRAB = "com.abdellatif.clipsave.action.QUICK_GRAB"
+        const val ACTION_OPEN_DOWNLOAD = "com.abdellatif.clipsave.action.OPEN_DOWNLOAD"
+        const val ACTION_SHOW_DOWNLOADS = "com.abdellatif.clipsave.action.SHOW_DOWNLOADS"
+        const val ACTION_REVIEW_URL = "com.abdellatif.clipsave.action.REVIEW_URL"
+        const val EXTRA_DOWNLOAD_ID = "download_id"
+        const val EXTRA_URL = "url"
     }
 }
 
 @Composable
-fun ClipSaveRoot() {
+fun ClipSaveRoot(
+    launchRequest: AppLaunchRequest? = null,
+    onLaunchRequestConsumed: (AppLaunchRequest) -> Unit = {}
+) {
     val vm: AppViewModel = viewModel(factory = AppViewModel.Factory)
     val settings by vm.settings.collectAsState()
 
@@ -120,7 +201,11 @@ fun ClipSaveRoot() {
             if (!settings.onboardingDone) {
                 OnboardingScreen(onDone = { vm.completeOnboarding() })
             } else {
-                AppScaffold(vm = vm)
+                AppScaffold(
+                    vm = vm,
+                    launchRequest = launchRequest,
+                    onLaunchRequestConsumed = onLaunchRequestConsumed
+                )
             }
         }
     }

@@ -8,6 +8,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,31 +18,42 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
@@ -57,6 +70,18 @@ fun formatBytes(bytes: Long): String {
         unit++
     }
     return String.format(Locale.US, "%.1f %s", value, units[unit])
+}
+
+fun formatEta(seconds: Long): String {
+    if (seconds < 0) return ""
+    val hours = seconds / 3_600
+    val minutes = (seconds % 3_600) / 60
+    val remaining = seconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remaining)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, remaining)
+    }
 }
 
 @Composable
@@ -114,8 +139,11 @@ fun MinimalChip(
 fun StatusBadge(status: DownloadStatus) {
     val (label, color) = when (status) {
         DownloadStatus.QUEUED -> "Queued" to MaterialTheme.colorScheme.onSurfaceVariant
+        DownloadStatus.WAITING_FOR_NETWORK ->
+            "Waiting for network" to MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.EXTRACTING -> "Extracting" to MaterialTheme.colorScheme.primary
         DownloadStatus.DOWNLOADING -> "Downloading" to MaterialTheme.colorScheme.primary
+        DownloadStatus.PAUSED -> "Paused" to MaterialTheme.colorScheme.onSurfaceVariant
         DownloadStatus.COMPLETED -> "Saved" to Color(0xFF3E9C5C)
         DownloadStatus.FAILED -> "Failed" to MaterialTheme.colorScheme.error
     }
@@ -157,7 +185,15 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
 }
 
 private val Download.isBusy: Boolean
-    get() = status == DownloadStatus.DOWNLOADING || status == DownloadStatus.EXTRACTING
+    get() = status == DownloadStatus.QUEUED ||
+        status == DownloadStatus.WAITING_FOR_NETWORK ||
+        status == DownloadStatus.DOWNLOADING ||
+        status == DownloadStatus.EXTRACTING
+
+private val Download.isActiveTransfer: Boolean
+    get() = status == DownloadStatus.QUEUED ||
+        status == DownloadStatus.DOWNLOADING ||
+        status == DownloadStatus.EXTRACTING
 
 /**
  * Older builds saved X's Open Graph tweet-card preview when yt-dlp failed.
@@ -170,19 +206,51 @@ private val Download.isLegacyTwitterPreview: Boolean
         mediaType == MediaType.IMAGE &&
         fileName.startsWith("dl_")
 
+private fun transferDetails(item: Download): String {
+    val parts = buildList {
+        when {
+            item.bytesDownloaded > 0 && item.totalBytes > 0 -> add(
+                "${formatBytes(item.bytesDownloaded)} / ${formatBytes(item.totalBytes)}"
+            )
+            item.bytesDownloaded > 0 -> add(formatBytes(item.bytesDownloaded))
+        }
+        if (item.speedBytesPerSecond > 0) {
+            add("${formatBytes(item.speedBytesPerSecond)}/s")
+        }
+        if (item.etaSeconds >= 0) {
+            add("${formatEta(item.etaSeconds)} left")
+        }
+    }
+    return parts.joinToString(" · ").ifBlank {
+        when (item.status) {
+            DownloadStatus.QUEUED -> "Queued"
+            DownloadStatus.EXTRACTING -> "Preparing media"
+            else -> "Transferring"
+        }
+    }
+}
+
 @Composable
 fun DownloadRow(
     item: Download,
+    modifier: Modifier = Modifier,
     onRetry: (String) -> Unit,
+    onPause: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onOpen: ((Download) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onShare: ((Download) -> Unit)? = null,
+    onOpen: ((Download) -> Unit)? = null
 ) {
-    val playable = item.status == DownloadStatus.COMPLETED &&
-        item.mediaType == MediaType.VIDEO &&
+    var confirmFileDelete by remember(item.id) { mutableStateOf(false) }
+    val openable = item.status == DownloadStatus.COMPLETED &&
+        (item.mediaType == MediaType.VIDEO ||
+            item.mediaType == MediaType.AUDIO ||
+            item.mediaType == MediaType.IMAGE) &&
         !item.localUri.isNullOrBlank() &&
         onOpen != null
-    val contentModifier = if (playable) {
+    val shareable = item.status == DownloadStatus.COMPLETED &&
+        !item.localUri.isNullOrBlank() &&
+        onShare != null
+    val contentModifier = if (openable) {
         Modifier.clickable(role = Role.Button) { onOpen?.invoke(item) }
     } else {
         Modifier
@@ -210,6 +278,8 @@ fun DownloadRow(
                         append(item.platform.displayName)
                         append(" · ")
                         append(item.mediaType.name.lowercase(Locale.US))
+                        append(" · ")
+                        append(item.format.label)
                         if (size > 0) append(" · ").append(formatBytes(size))
                     }
                     Text(
@@ -219,56 +289,81 @@ fun DownloadRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (item.status == DownloadStatus.COMPLETED) {
-                        Spacer(Modifier.height(3.dp))
-                        if (item.isLegacyTwitterPreview) {
-                            Text(
-                                text = "Preview only · retry",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            StatusBadge(item.status)
-                        }
+                    Spacer(Modifier.height(3.dp))
+                    if (item.isLegacyTwitterPreview) {
+                        Text(
+                            text = "Preview only · retry",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        StatusBadge(item.status)
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                if (playable) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ) {
-                        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                contentDescription = "Play ${
-                                    item.title.ifBlank { item.fileName.ifBlank { "video" } }
-                                }",
-                                modifier = Modifier.padding(start = 2.dp).size(23.dp)
-                            )
-                        }
-                    }
-                }
-                if (item.status == DownloadStatus.COMPLETED) {
+            }
+
+            if (item.status == DownloadStatus.COMPLETED) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (item.isLegacyTwitterPreview) {
                         RowAction(
                             label = "Retry media extraction",
                             icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
                         ) { onRetry(item.id) }
                     }
+                    if (openable) {
+                        RowAction(
+                            label = if (item.mediaType == MediaType.IMAGE) "View" else "Play",
+                            emphasized = true,
+                            opticalPlayOffset = item.mediaType != MediaType.IMAGE,
+                            icon = {
+                                if (item.mediaType == MediaType.IMAGE) {
+                                    Icon(
+                                        Icons.Rounded.OpenInFull,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        painterResource(R.drawable.play),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        ) { onOpen?.invoke(item) }
+                    }
+                    if (shareable) {
+                        RowAction(
+                            label = "Share",
+                            icon = {
+                                Icon(
+                                    painterResource(R.drawable.share),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        ) { onShare?.invoke(item) }
+                    }
                     RowAction(
-                        label = "Remove",
+                        label = "Delete file",
                         destructive = true,
-                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
-                    ) { onDelete(item.id) }
-                } else {
-                    StatusBadge(item.status)
+                        icon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    ) { confirmFileDelete = true }
                 }
             }
 
             AnimatedVisibility(
-                visible = item.isBusy,
+                visible = item.isActiveTransfer,
                 enter = expandVertically(),
                 exit = shrinkVertically()
             ) {
@@ -277,29 +372,56 @@ fun DownloadRow(
                     animationSpec = tween(220),
                     label = "downloadProgress"
                 )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                ) {
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Box(
                         Modifier
-                            .fillMaxWidth(progress)
+                            .fillMaxWidth()
                             .height(4.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(progress)
+                                .height(4.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = transferDetails(item),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${item.progress.coerceIn(0, 100)}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
-            if (item.status == DownloadStatus.FAILED && !item.errorMessage.isNullOrBlank()) {
+            if ((item.status == DownloadStatus.FAILED ||
+                    item.status == DownloadStatus.PAUSED ||
+                    item.status == DownloadStatus.WAITING_FOR_NETWORK) &&
+                !item.errorMessage.isNullOrBlank()
+            ) {
                 Text(
                     text = item.errorMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (item.status == DownloadStatus.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.padding(top = 8.dp),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -312,20 +434,69 @@ fun DownloadRow(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (item.status == DownloadStatus.FAILED) {
+                    if (item.isBusy) {
                         RowAction(
-                            label = "Retry",
-                            icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+                            label = "Pause",
+                            icon = { Icon(Icons.Rounded.Pause, contentDescription = null) }
+                        ) { onPause(item.id) }
+                    }
+                    if (item.status == DownloadStatus.FAILED || item.status == DownloadStatus.PAUSED) {
+                        RowAction(
+                            label = if (item.status == DownloadStatus.PAUSED) "Resume" else "Retry",
+                            icon = {
+                                if (item.status == DownloadStatus.PAUSED) {
+                                    Icon(
+                                        painterResource(R.drawable.play),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Rounded.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         ) { onRetry(item.id) }
                     }
                     RowAction(
                         label = "Remove",
                         destructive = true,
-                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                        icon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     ) { onDelete(item.id) }
                 }
             }
         }
+    }
+
+    if (confirmFileDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmFileDelete = false },
+            title = { Text("Delete saved file?") },
+            text = {
+                Text("This permanently deletes the media from your device and removes its download history.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmFileDelete = false
+                        onDelete(item.id)
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmFileDelete = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -333,30 +504,63 @@ fun DownloadRow(
 private fun RowAction(
     label: String,
     destructive: Boolean = false,
+    emphasized: Boolean = false,
+    opticalPlayOffset: Boolean = false,
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "rowActionPress"
+    )
     val containerColor = if (destructive) {
         MaterialTheme.colorScheme.error
+    } else if (emphasized) {
+        MaterialTheme.colorScheme.secondary
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = if (destructive) {
         MaterialTheme.colorScheme.onError
+    } else if (emphasized) {
+        MaterialTheme.colorScheme.onSecondary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     IconButton(
         onClick = onClick,
-        modifier = Modifier.padding(start = 8.dp).size(44.dp),
+        modifier = Modifier
+            .padding(start = 4.dp)
+            .size(44.dp)
+            .semantics { contentDescription = label },
+        interactionSource = interactionSource,
         colors = IconButtonDefaults.iconButtonColors(
-            containerColor = containerColor,
             contentColor = contentColor
         )
     ) {
-        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
-            icon()
+        Box(
+            Modifier
+                .size(36.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(CircleShape)
+                .background(containerColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .offset(x = if (opticalPlayOffset) 1.dp else 0.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
         }
     }
 }

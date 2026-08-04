@@ -72,10 +72,25 @@ No ads. No telemetry. No tracking. MIT licensed.
 - **Share to ClipSave** — share any link from any app to download it.
 - **One-tap floating button** (Accessibility) while browsing Instagram / TikTok / X.
 - **Audio-only** extraction (m4a) for any supported video.
-- **Foreground service** downloads with live progress notifications.
-- **In-app video player** with seeking and 10-second skip controls.
+- **Batch downloads** from pasted or shared text with automatic link deduplication.
+- **Playlist review** with metadata, thumbnails, durations, selective queueing, and safe limits.
+- **Pause and resume** with retained yt-dlp partial files, including process-death recovery.
+- **Resource-aware queue** capped at two concurrent engine jobs for predictable memory and battery use.
+- **Accelerated transfers** with four conservative aria2 segments where the source supports them.
+- **Live transfer details** with downloaded size, total size, speed, percentage, and ETA.
+- **Embedded media details** with chapters and metadata, plus cover art for extracted audio.
+- **Optional embedded subtitles** in the device language with English fallback.
+- **Secure cookies.txt import** for media you are authorized to access; stored privately and excluded from backups.
+- **Unmetered-only mode** that waits on costly networks and resumes automatically when eligible.
+- **Duplicate-transfer protection** across paste, share, quick-grab, playlist, and retry entry points.
+- **Crash-remnant cleanup** that preserves resumable work while reclaiming abandoned transfer cache.
+- **Battery-aware engine updates** limited to once per 24 hours, with an immediate manual update action.
+- **Foreground service** downloads with live progress and open/share completion actions.
+- **In-app media viewer** for video, audio, and images with seeking and 10-second skip controls.
+- **Secure saved-media sharing** through temporary Android content-URI permissions.
+- **Truthful file management** with confirmed deletion from both device storage and history.
 - **Material 3** UI with light / dark / system modes and six saved accent colors.
-- **Downloads manager**: search, filter, retry failed, delete, clear.
+- **Downloads manager**: search, filter, pause/resume, retry, open, share, delete, and clear.
 - Saves through **MediaStore** — no storage permission needed on Android 10+.
 - **Shizuku / root status** surfaced in Settings (downloads need neither).
 
@@ -84,18 +99,46 @@ No ads. No telemetry. No tracking. MIT licensed.
 The app builds on **GitHub Actions** automatically on every push to `main`
 (`.github/workflows/android.yml`). It produces:
 
-- `ClipSave-debug` — installable debug APK (always).
-- `ClipSave-release-unsigned` — when no signing secrets are set.
-- `ClipSave-release-signed` — when keystore secrets are configured.
+- `ClipSave-debug` — installable ABI-specific debug APKs.
+- `ClipSave-release` — optimized ABI-specific APKs, signed when keystore secrets are configured.
+
+Choose the APK matching the device CPU:
+
+- `arm64-v8a` — nearly all current Android phones and tablets.
+- `armeabi-v7a` — older 32-bit Android devices.
+- `x86_64` — BlueStacks, modern Android emulators, and compatible ChromeOS devices.
+- `x86` — older 32-bit emulators and x86 devices.
+
+Splitting by CPU keeps each install much smaller because it contains only one native
+Python/ffmpeg/aria2 stack instead of all four.
 
 ### Local build
 
 ```bash
 ./gradlew :app:assembleDebug
-# output: app/build/outputs/apk/debug/app-debug.apk
+# output: app/build/outputs/apk/debug/app-<abi>-debug.apk
 ```
 
-Requirements: JDK 17, Android SDK 35.
+Requirements: JDK 17, Android SDK 36.
+
+### Publish a release
+
+Create releases only from a clean, fully committed worktree. From the project root:
+
+```powershell
+# Windows PowerShell
+.\release.ps1 2.2.0
+```
+
+```bash
+# macOS / Linux / Git Bash
+./release.sh 2.2.0
+```
+
+The script validates the version, increments `versionCode`, runs unit tests, lint, R8,
+resource shrinking, and all release builds, then creates the release commit and tag and pushes
+both atomically. Tagged GitHub releases fail closed unless `KEYSTORE_BASE64`, `KEY_ALIAS`,
+`KEYSTORE_PASSWORD`, and `KEY_PASSWORD` are all configured as repository secrets.
 
 ## Tech
 
