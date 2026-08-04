@@ -24,6 +24,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -40,7 +43,13 @@ jobs:
 
       - name: Check for signing secrets
         id: keycheck
-        run: echo "available=${{ secrets.KEYSTORE_BASE64 != '' }}" >> "$GITHUB_OUTPUT"
+        run: echo "available=${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEY_ALIAS != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Require release signing
+        if: steps.keycheck.outputs.available != 'true'
+        run: |
+          echo "::error::Tagged releases require all Android signing secrets."
+          exit 1
 
       - name: Sign release APK
         id: sign
@@ -53,19 +62,22 @@ jobs:
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
-          BUILD_TOOLS_VERSION: "35.0.0"
+          BUILD_TOOLS_VERSION: "36.0.0"
 
-      - name: Pick APK to publish
-        id: apk
+      - name: Prepare signed release APKs
+        env:
+          SIGNED_RELEASE_FILES: ${{ steps.sign.outputs.signedReleaseFiles }}
         run: |
-          if [ -n "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
-            echo "path=${{ steps.sign.outputs.signedReleaseFile }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)" >> "$GITHUB_OUTPUT"
-          fi
+          mkdir -p app/build/publish
+          IFS=':' read -ra files <<< "$SIGNED_RELEASE_FILES"
+          for file in "${files[@]}"; do
+            test -n "$file"
+            cp "$file" app/build/publish/
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.apk.outputs.path }}
+          files: app/build/publish/*.apk
+          fail_on_unmatched_files: true
           generate_release_notes: true
