@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,9 +81,8 @@ fun SettingsScreen(vm: AppViewModel) {
     }
     var engineMsg by remember { mutableStateOf("") }
     var updating by remember { mutableStateOf(false) }
-    val captionLanguage = remember {
-        Locale.getDefault().displayLanguage.takeIf(String::isNotBlank) ?: "English"
-    }
+    val currentLocale = LocalConfiguration.current.locales[0]
+    val captionLanguage = currentLocale.displayLanguage.takeIf(String::isNotBlank) ?: "English"
 
     Column(
         Modifier
@@ -190,7 +190,7 @@ fun SettingsScreen(vm: AppViewModel) {
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        if (Locale.getDefault().language.equals("en", ignoreCase = true)) {
+                        if (currentLocale.language.equals("en", ignoreCase = true)) {
                             "Adds available English captions to downloaded videos."
                         } else {
                             "Adds available $captionLanguage captions, with English fallback."

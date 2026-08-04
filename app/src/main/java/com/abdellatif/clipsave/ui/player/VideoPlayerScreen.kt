@@ -1,6 +1,5 @@
 package com.abdellatif.clipsave.ui.player
 
-import android.net.Uri
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -46,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -121,13 +122,13 @@ private fun PlaybackScreen(
         ExoPlayer.Builder(context).build().apply {
             setAudioAttributes(AudioAttributes.DEFAULT, true)
             setHandleAudioBecomingNoisy(true)
-            setMediaItem(MediaItem.fromUri(Uri.parse(requireNotNull(download.localUri))))
+            setMediaItem(MediaItem.fromUri(requireNotNull(download.localUri).toUri()))
             prepare()
             playWhenReady = true
         }
     }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
-    var playbackState by remember { mutableStateOf(player.playbackState) }
+    var playbackState by remember { mutableIntStateOf(player.playbackState) }
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -492,7 +493,7 @@ private fun PlaybackControls(
 
 @Composable
 private fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit) {
-    var widthPx by remember { mutableStateOf(0) }
+    var widthPx by remember { mutableIntStateOf(0) }
     val currentOnValueChange by rememberUpdatedState(onValueChange)
     val fraction = value.coerceIn(0f, 1f)
     Canvas(

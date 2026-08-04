@@ -7,19 +7,26 @@ plugins {
 
 android {
     namespace = "com.abdellatif.clipsave"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.abdellatif.clipsave"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 106
         versionName = "2.1.0"
         vectorDrawables { useSupportLibrary = true }
-        ndk {
-            // yt-dlp ships native Python/ffmpeg/aria2c binaries. Keep x86 builds so
-            // emulators run the engine natively instead of translating an ARM Python binary.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+    }
+
+    splits {
+        abi {
+            // Native Python/ffmpeg/aria2c dominates APK size. Publish one APK per CPU instead
+            // of making every user download all four native stacks. x86 stays available for
+            // BlueStacks, Android emulators, and compatible ChromeOS devices.
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = false
         }
     }
 
@@ -58,6 +65,9 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+        // Newer suggestions currently require API 37/AGP 9.1. Keep the audited API 36
+        // production set until Android 17 becomes the app's explicit compatibility target.
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency")
     }
 
     packaging {

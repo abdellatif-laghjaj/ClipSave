@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ClipSave</string>
-    <string name="accessibility_label">ClipSave Overlay</string>
     <string name="accessibility_description">Shows a floating download button while you browse Instagram, TikTok, and X so you can grab media with one tap.</string>
 </resources>

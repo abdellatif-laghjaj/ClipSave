@@ -30,7 +30,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ClipSave"
-        tools:targetApi="35">
+        tools:targetApi="36">
 
         <activity
             android:name=".ui.MainActivity"

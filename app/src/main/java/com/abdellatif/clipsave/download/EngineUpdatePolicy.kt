@@ -1,6 +1,7 @@
 package com.abdellatif.clipsave.download
 
 import android.content.Context
+import androidx.core.content.edit
 
 /** Keeps extractors fresh without spending network and battery on every process launch. */
 internal object EngineUpdatePolicy {
@@ -14,7 +15,7 @@ internal object EngineUpdatePolicy {
         shouldRefresh(preferences(context).getLong(KEY_LAST_SUCCESS, 0L), now)
 
     fun recordSuccess(context: Context, now: Long = System.currentTimeMillis()) {
-        preferences(context).edit().putLong(KEY_LAST_SUCCESS, now).apply()
+        preferences(context).edit { putLong(KEY_LAST_SUCCESS, now) }
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(

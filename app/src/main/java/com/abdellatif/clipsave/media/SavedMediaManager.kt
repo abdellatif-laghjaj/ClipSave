@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.download.FileSaver
 import java.io.File
@@ -44,7 +45,7 @@ object SavedMediaManager {
         }
 
         return runCatching {
-            val uri = Uri.parse(value)
+            val uri = value.toUri()
             when (uri.scheme?.lowercase()) {
                 "content" -> deleteContentUri(context, uri)
                 "file" -> deleteFile(uri.path?.let(::File))
@@ -92,7 +93,7 @@ object SavedMediaManager {
         val value = download.localUri
             ?.takeIf(String::isNotBlank)
             ?: error("Saved file is no longer available.")
-        val original = Uri.parse(value)
+        val original = value.toUri()
         val shareUri = when (original.scheme?.lowercase()) {
             "content" -> original
             "file" -> providerUri(context, original.path?.let(::File))
