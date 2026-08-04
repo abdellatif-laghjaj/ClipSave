@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 private enum class Tab(val route: String, val label: String, val icon: Int) {
     HOME("home", "Home", R.drawable.home),
     DOWNLOADS("downloads", "Downloads", R.drawable.folder_donwloads),
-    PASTE("paste", "New", R.drawable.paste),
+    PASTE("paste", "New", R.drawable.new_download),
     SETTINGS("settings", "Settings", R.drawable.settings)
 }
 

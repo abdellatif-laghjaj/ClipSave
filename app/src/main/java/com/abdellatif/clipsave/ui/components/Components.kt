@@ -18,18 +18,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,12 +46,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
@@ -320,27 +320,44 @@ fun DownloadRow(
                             emphasized = true,
                             opticalPlayOffset = item.mediaType != MediaType.IMAGE,
                             icon = {
-                                Icon(
-                                    if (item.mediaType == MediaType.IMAGE) {
-                                        Icons.Rounded.OpenInFull
-                                    } else {
-                                        Icons.Rounded.PlayArrow
-                                    },
-                                    contentDescription = null
-                                )
+                                if (item.mediaType == MediaType.IMAGE) {
+                                    Icon(
+                                        Icons.Rounded.OpenInFull,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        painterResource(R.drawable.play),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         ) { onOpen?.invoke(item) }
                     }
                     if (shareable) {
                         RowAction(
                             label = "Share",
-                            icon = { Icon(Icons.Rounded.Share, contentDescription = null) }
+                            icon = {
+                                Icon(
+                                    painterResource(R.drawable.share),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         ) { onShare?.invoke(item) }
                     }
                     RowAction(
                         label = "Delete file",
                         destructive = true,
-                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                        icon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     ) { confirmFileDelete = true }
                 }
             }
@@ -427,21 +444,32 @@ fun DownloadRow(
                         RowAction(
                             label = if (item.status == DownloadStatus.PAUSED) "Resume" else "Retry",
                             icon = {
-                                Icon(
-                                    if (item.status == DownloadStatus.PAUSED) {
-                                        Icons.Rounded.PlayArrow
-                                    } else {
-                                        Icons.Rounded.Refresh
-                                    },
-                                    contentDescription = null
-                                )
+                                if (item.status == DownloadStatus.PAUSED) {
+                                    Icon(
+                                        painterResource(R.drawable.play),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Rounded.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         ) { onRetry(item.id) }
                     }
                     RowAction(
                         label = "Remove",
                         destructive = true,
-                        icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) }
+                        icon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     ) { onDelete(item.id) }
                 }
             }
@@ -506,26 +534,33 @@ private fun RowAction(
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .padding(start = 8.dp)
+            .padding(start = 4.dp)
             .size(44.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
             .semantics { contentDescription = label },
         interactionSource = interactionSource,
         colors = IconButtonDefaults.iconButtonColors(
-            containerColor = containerColor,
             contentColor = contentColor
         )
     ) {
         Box(
             Modifier
-                .size(20.dp)
-                .padding(start = if (opticalPlayOffset) 2.dp else 0.dp),
+                .size(36.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(CircleShape)
+                .background(containerColor),
             contentAlignment = Alignment.Center
         ) {
-            icon()
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .offset(x = if (opticalPlayOffset) 1.dp else 0.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
         }
     }
 }

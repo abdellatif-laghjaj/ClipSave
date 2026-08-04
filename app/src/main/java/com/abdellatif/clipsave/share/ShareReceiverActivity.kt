@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -30,9 +27,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.abdellatif.clipsave.R
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.CollectionUrlDetector
 import com.abdellatif.clipsave.data.model.Platform
@@ -169,16 +168,26 @@ private fun ConfirmDialog(
                 modifier = Modifier.fillMaxWidth(),
                 shape = CircleShape
             ) {
-                Icon(Icons.Filled.Download, contentDescription = null)
-                Text("  Download")
+                Icon(
+                    painterResource(R.drawable.download),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.size(8.dp))
+                Text("Download")
             }
             FilledTonalButton(
                 onClick = { onDownload(DownloadFormat.AUDIO_M4A) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = CircleShape
             ) {
-                Icon(Icons.Filled.MusicNote, contentDescription = null)
-                Text("  Audio only")
+                Icon(
+                    painterResource(R.drawable.audio),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.size(8.dp))
+                Text("Audio only")
             }
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text("Cancel")
