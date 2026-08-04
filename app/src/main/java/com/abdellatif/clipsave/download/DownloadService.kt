@@ -482,7 +482,7 @@ class DownloadService : Service() {
         }
     }
 
-    private fun pauseDownload(id: String) {
+    private fun pauseDownload(id: String, reason: String? = null) {
         val item = repo.get(id) ?: return
         if (item.status !in BUSY_STATUSES) return
         pauseRequests += id
@@ -492,7 +492,7 @@ class DownloadService : Service() {
                 status = DownloadStatus.PAUSED,
                 speedBytesPerSecond = 0,
                 etaSeconds = -1,
-                errorMessage = null
+                errorMessage = reason
             )
         )
         jobs[id]?.cancel()
@@ -633,6 +633,13 @@ class DownloadService : Service() {
         stopSelf()
     }
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        repo.downloads.value
+            .filter { it.status in BUSY_STATUSES }
+            .forEach { pauseDownload(it.id, FGS_TIMEOUT_MESSAGE) }
+        stopServiceNow()
+    }
+
     override fun onDestroy() {
         activeCalls.values.forEach(Call::cancel)
         jobs.values.forEach(Job::cancel)
@@ -674,6 +681,8 @@ class DownloadService : Service() {
         private const val PROGRESS_INTERVAL_MS = 500L
         private const val MIN_SPEED_SAMPLE_MS = 250L
         private const val DOWNLOAD_BUFFER_SIZE = 64 * 1024
+        private const val FGS_TIMEOUT_MESSAGE =
+            "Android paused this long-running background download. Tap Resume to continue."
 
         private val BUSY_STATUSES = setOf(
             DownloadStatus.QUEUED,

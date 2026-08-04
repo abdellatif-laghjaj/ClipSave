@@ -26,6 +26,10 @@ class DownloadCacheCleanerTest {
             writeBytes(ByteArray(7))
             setLastModified(cutoff - 2_000)
         }
+        val staleEngineCookie = File(cache, "tmpabc_123.cookies").apply {
+            writeBytes(ByteArray(3))
+            setLastModified(cutoff - 2_000)
+        }
         val retained = File(cache, "yt_keep").apply {
             mkdir()
             File(this, "audio.part").writeBytes(ByteArray(5))
@@ -39,15 +43,39 @@ class DownloadCacheCleanerTest {
             mkdir()
             setLastModified(cutoff - 2_000)
         }
+        val savedCookieName = File(cache, "cookies.txt").apply {
+            writeBytes(ByteArray(2))
+            setLastModified(cutoff - 2_000)
+        }
 
         val result = DownloadCacheCleaner.clean(cache, setOf("keep"), cutoff)
 
-        assertEquals(2, result.removedEntries)
-        assertEquals(19, result.reclaimedBytes)
+        assertEquals(3, result.removedEntries)
+        assertEquals(22, result.reclaimedBytes)
         assertFalse(staleYt.exists())
         assertFalse(staleDirect.exists())
+        assertFalse(staleEngineCookie.exists())
         assertTrue(retained.exists())
         assertTrue(currentProcess.exists())
         assertTrue(unrelated.exists())
+        assertTrue(savedCookieName.exists())
+    }
+
+    @Test
+    fun removesOnlyTransientEngineCookieFilesAfterExecutionsFinish() {
+        val cache = temporaryFolder.newFolder("runtime-cache")
+        val first = File(cache, "tmp3jpop47c.cookies").apply { writeBytes(ByteArray(79)) }
+        val second = File(cache, "tmp_cookie-2.cookies").apply { writeBytes(ByteArray(11)) }
+        val importedName = File(cache, "cookies.txt").apply { writeBytes(ByteArray(5)) }
+        val nearMatch = File(cache, "tmp.cookies").apply { writeBytes(ByteArray(7)) }
+
+        val result = DownloadCacheCleaner.cleanTransientEngineCookies(cache)
+
+        assertEquals(2, result.removedEntries)
+        assertEquals(90, result.reclaimedBytes)
+        assertFalse(first.exists())
+        assertFalse(second.exists())
+        assertTrue(importedName.exists())
+        assertTrue(nearMatch.exists())
     }
 }

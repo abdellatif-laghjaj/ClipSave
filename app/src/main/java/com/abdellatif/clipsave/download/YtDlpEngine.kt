@@ -32,6 +32,8 @@ object YtDlpEngine {
     @Volatile
     var ytdlpVersion: String? = null
         private set
+    private val executionLock = Any()
+    private var activeExecutions = 0
 
     fun ensureInit(context: Context): Boolean {
         if (initialized) return true
@@ -106,7 +108,9 @@ object YtDlpEngine {
             addOption("--no-colors")
             addOption("--playlist-end", PLAYLIST_PREVIEW_LIMIT.toString())
         }
-        val response = YoutubeDL.getInstance().execute(request, processId)
+        val response = withEngineExecution(context) {
+            YoutubeDL.getInstance().execute(request, processId)
+        }
         return PlaylistParser.parse(response.out, PLAYLIST_PREVIEW_LIMIT)
             ?.takeIf { it.items.isNotEmpty() }
             ?: throw IllegalArgumentException("This link does not contain a downloadable playlist.")
@@ -195,15 +199,17 @@ object YtDlpEngine {
 
         var previous: DownloadProgress? = null
         try {
-            YoutubeDL.getInstance().execute(request, processId) { progress, eta, line ->
-                val progressLine = line.contains("[download]", ignoreCase = true) ||
-                    line.trimStart().startsWith("[#") ||
-                    line.trimStart().startsWith("size=")
-                if (progress >= 0f && progressLine) {
-                    val snapshot = DownloadProgressParser.parse(progress, eta, line, workDir)
-                    if (snapshot != previous) {
-                        previous = snapshot
-                        onProgress(snapshot)
+            withEngineExecution(context) {
+                YoutubeDL.getInstance().execute(request, processId) { progress, eta, line ->
+                    val progressLine = line.contains("[download]", ignoreCase = true) ||
+                        line.trimStart().startsWith("[#") ||
+                        line.trimStart().startsWith("size=")
+                    if (progress >= 0f && progressLine) {
+                        val snapshot = DownloadProgressParser.parse(progress, eta, line, workDir)
+                        if (snapshot != previous) {
+                            previous = snapshot
+                            onProgress(snapshot)
+                        }
                     }
                 }
             }
@@ -255,5 +261,19 @@ object YtDlpEngine {
             it.isFile && it.length() > 0 && it.name.endsWith(".part")
         } == true
         if (!hasResumableData) workDir.deleteRecursively()
+    }
+
+    private inline fun <T> withEngineExecution(context: Context, execute: () -> T): T {
+        synchronized(executionLock) { activeExecutions += 1 }
+        return try {
+            execute()
+        } finally {
+            synchronized(executionLock) {
+                activeExecutions -= 1
+                if (activeExecutions == 0) {
+                    DownloadCacheCleaner.cleanTransientEngineCookies(context.cacheDir)
+                }
+            }
+        }
     }
 }
