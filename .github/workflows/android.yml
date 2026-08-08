@@ -75,15 +75,17 @@ jobs:
 
       - name: Prepare signed release APKs
         if: steps.keycheck.outputs.available == 'true'
-        env:
-          SIGNED_RELEASE_FILES: ${{ steps.sign.outputs.signedReleaseFiles }}
         run: |
           mkdir -p app/build/publish
-          IFS=':' read -ra files <<< "$SIGNED_RELEASE_FILES"
-          for file in "${files[@]}"; do
-            test -n "$file"
-            cp "$file" app/build/publish/
-          done
+          shopt -s nullglob
+          signed_files=(app/build/outputs/apk/release/*-signed.apk)
+          if (( ${#signed_files[@]} == 0 )); then
+            echo "::error::Signing completed but produced no signed APK files."
+            find app/build/outputs/apk/release -maxdepth 1 -type f -print
+            exit 1
+          fi
+          cp "${signed_files[@]}" app/build/publish/
+          ls -lh app/build/publish
 
       - name: Upload release APKs
         uses: actions/upload-artifact@v4
