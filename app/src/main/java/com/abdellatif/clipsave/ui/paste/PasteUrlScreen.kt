@@ -10,9 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,14 +21,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,7 +62,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -73,13 +78,11 @@ import com.abdellatif.clipsave.data.model.PlaylistPreview
 import com.abdellatif.clipsave.data.model.UrlInputParser
 import com.abdellatif.clipsave.download.FileSaver
 import com.abdellatif.clipsave.ui.AppViewModel
-import com.abdellatif.clipsave.ui.components.MinimalChip
 import com.abdellatif.clipsave.ui.components.PlatformIcon
 import com.abdellatif.clipsave.ui.components.SectionLabel
 import kotlinx.coroutines.delay
 import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PasteUrlScreen(vm: AppViewModel) {
     val context = LocalContext.current
@@ -164,40 +167,45 @@ fun PasteUrlScreen(vm: AppViewModel) {
         )
 
         Spacer(Modifier.height(24.dp))
-        TextField(
-            value = url,
-            onValueChange = { url = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text("Paste one or more links", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            minLines = 3,
-            shape = MaterialTheme.shapes.large,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.primary
-            ),
-            trailingIcon = {
-                IconButton(
-                    onClick = { url = readClipboard(context) },
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .size(44.dp)
-                        .background(MaterialTheme.colorScheme.secondary, CircleShape)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.paste),
-                        contentDescription = "Paste from clipboard",
-                        tint = MaterialTheme.colorScheme.onSecondary,
-                        modifier = Modifier.size(18.dp)
+        Box(Modifier.fillMaxWidth()) {
+            TextField(
+                value = url,
+                onValueChange = { url = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text(
+                        "Paste one or more links",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
+                },
+                minLines = 3,
+                shape = MaterialTheme.shapes.large,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                ),
+                trailingIcon = { Spacer(Modifier.size(44.dp)) }
+            )
+            IconButton(
+                onClick = { url = readClipboard(context) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 10.dp, bottom = 10.dp)
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.secondary, CircleShape)
+            ) {
+                Icon(
+                    painterResource(R.drawable.paste),
+                    contentDescription = "Paste from clipboard",
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
-        )
+        }
         AnimatedVisibility(visible = parsed.urls.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
             Row(
                 Modifier.padding(top = 12.dp),
@@ -252,20 +260,29 @@ fun PasteUrlScreen(vm: AppViewModel) {
         }
 
         Spacer(Modifier.height(28.dp))
-        SectionLabel("Quality")
+        SectionLabel("Video quality")
         Spacer(Modifier.height(10.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DownloadFormat.entries.forEach { f ->
-                MinimalChip(
-                    selected = format == f,
-                    onClick = { format = f },
-                    label = f.label
-                )
-            }
-        }
+        QualityCardRow(
+            formats = listOf(
+                DownloadFormat.BEST,
+                DownloadFormat.Q1080,
+                DownloadFormat.Q720,
+                DownloadFormat.Q480
+            ),
+            selected = format,
+            cardWidth = 142.dp,
+            onSelected = { format = it }
+        )
+
+        Spacer(Modifier.height(20.dp))
+        SectionLabel("Audio only")
+        Spacer(Modifier.height(10.dp))
+        QualityCardRow(
+            formats = listOf(DownloadFormat.AUDIO_M4A, DownloadFormat.AUDIO_MP3),
+            selected = format,
+            cardWidth = 176.dp,
+            onSelected = { format = it }
+        )
 
         Spacer(Modifier.height(28.dp))
         val isInspecting = playlistInspection is PlaylistInspectionState.Loading
@@ -329,6 +346,124 @@ fun PasteUrlScreen(vm: AppViewModel) {
             }
         )
     }
+}
+
+@Composable
+private fun QualityCardRow(
+    formats: List<DownloadFormat>,
+    selected: DownloadFormat,
+    cardWidth: Dp,
+    onSelected: (DownloadFormat) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        formats.forEach { format ->
+            QualityCardOption(
+                format = format,
+                selected = selected == format,
+                onSelected = { onSelected(format) },
+                modifier = Modifier.width(cardWidth)
+            )
+        }
+    }
+}
+
+@Composable
+private fun QualityCardOption(
+    format: DownloadFormat,
+    selected: Boolean,
+    onSelected: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .selectable(
+                selected = selected,
+                onClick = onSelected,
+                role = Role.RadioButton
+            ),
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 88.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = qualityCardLabel(format),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .background(MaterialTheme.colorScheme.secondary, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+            }
+            Text(
+                text = qualityCardDescription(format),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun qualityCardLabel(format: DownloadFormat): String = when (format) {
+    DownloadFormat.AUDIO_M4A -> "M4A"
+    DownloadFormat.AUDIO_MP3 -> "MP3"
+    else -> format.label
+}
+
+private fun qualityCardDescription(format: DownloadFormat): String = when (format) {
+    DownloadFormat.BEST -> "Original resolution"
+    DownloadFormat.Q1080 -> "Full HD"
+    DownloadFormat.Q720 -> "HD"
+    DownloadFormat.Q480 -> "Smaller file"
+    DownloadFormat.AUDIO_M4A -> "Efficient audio"
+    DownloadFormat.AUDIO_MP3 -> "Most compatible"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

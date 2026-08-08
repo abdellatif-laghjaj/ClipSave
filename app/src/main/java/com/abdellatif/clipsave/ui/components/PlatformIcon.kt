@@ -63,3 +63,19 @@ fun PlatformIcon(
         )
     }
 }
+
+/** Brand glyph without a surrounding tile for compact source attribution. */
+@Composable
+fun PlatformMark(
+    platform: Platform,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 16.dp
+) {
+    val artwork = platform.artwork()
+    Icon(
+        painter = painterResource(artwork.icon),
+        contentDescription = platform.displayName,
+        tint = artwork.color ?: MaterialTheme.colorScheme.onSurface,
+        modifier = modifier.size(iconSize)
+    )
+}
