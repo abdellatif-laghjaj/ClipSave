@@ -1,5 +1,11 @@
 package com.abdellatif.clipsave.ui.components
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -7,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -18,15 +25,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Photo
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -39,13 +50,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -58,6 +73,9 @@ import com.abdellatif.clipsave.data.model.Download
 import com.abdellatif.clipsave.data.model.DownloadStatus
 import com.abdellatif.clipsave.data.model.MediaType
 import com.abdellatif.clipsave.data.model.Platform
+import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 fun formatBytes(bytes: Long): String {
@@ -208,11 +226,10 @@ private val Download.isLegacyTwitterPreview: Boolean
 
 private fun transferDetails(item: Download): String {
     val parts = buildList {
-        when {
-            item.bytesDownloaded > 0 && item.totalBytes > 0 -> add(
-                "${formatBytes(item.bytesDownloaded)} / ${formatBytes(item.totalBytes)}"
-            )
-            item.bytesDownloaded > 0 -> add(formatBytes(item.bytesDownloaded))
+        if (item.progress > 0) {
+            add("${item.progress.coerceIn(0, 100)}%")
+        } else if (item.bytesDownloaded > 0) {
+            add(formatBytes(item.bytesDownloaded))
         }
         if (item.speedBytesPerSecond > 0) {
             add("${formatBytes(item.speedBytesPerSecond)}/s")
@@ -261,9 +278,9 @@ fun DownloadRow(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(contentModifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PlatformIcon(item.platform)
+        Column(contentModifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                MediaThumbnail(item)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -272,93 +289,52 @@ fun DownloadRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(5.dp))
                     val size = maxOf(item.totalBytes, item.bytesDownloaded)
                     val meta = buildString {
-                        append(item.platform.displayName)
-                        append(" · ")
                         append(item.mediaType.name.lowercase(Locale.US))
                         append(" · ")
                         append(item.format.label)
                         if (size > 0) append(" · ").append(formatBytes(size))
                     }
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    if (item.isLegacyTwitterPreview) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        PlatformMark(item.platform)
                         Text(
-                            text = "Preview only · retry",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            text = meta,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    } else {
-                        StatusBadge(item.status)
                     }
-                }
-            }
-
-            if (item.status == DownloadStatus.COMPLETED) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (item.isLegacyTwitterPreview) {
-                        RowAction(
-                            label = "Retry media extraction",
-                            icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
-                        ) { onRetry(item.id) }
-                    }
-                    if (openable) {
-                        RowAction(
-                            label = if (item.mediaType == MediaType.IMAGE) "View" else "Play",
-                            emphasized = true,
-                            opticalPlayOffset = item.mediaType != MediaType.IMAGE,
-                            icon = {
-                                if (item.mediaType == MediaType.IMAGE) {
-                                    Icon(
-                                        Icons.Rounded.OpenInFull,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        painterResource(R.drawable.play),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        ) { onOpen?.invoke(item) }
-                    }
-                    if (shareable) {
-                        RowAction(
-                            label = "Share",
-                            icon = {
-                                Icon(
-                                    painterResource(R.drawable.share),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        ) { onShare?.invoke(item) }
-                    }
-                    RowAction(
-                        label = "Delete file",
-                        destructive = true,
-                        icon = {
-                            Icon(
-                                painterResource(R.drawable.delete),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                    Spacer(Modifier.height(5.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (item.isLegacyTwitterPreview) {
+                            Text(
+                                text = "Preview only · retry",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            StatusBadge(item.status)
+                        }
+                        if (item.status == DownloadStatus.COMPLETED) {
+                            CompletedActions(
+                                item = item,
+                                shareable = shareable,
+                                onRetry = onRetry,
+                                onShare = onShare,
+                                onDeleteRequested = { confirmFileDelete = true }
                             )
                         }
-                    ) { confirmFileDelete = true }
+                    }
                 }
             }
 
@@ -372,39 +348,60 @@ fun DownloadRow(
                     animationSpec = tween(220),
                     label = "downloadProgress"
                 )
-                Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
                         Box(
                             Modifier
-                                .fillMaxWidth(progress)
+                                .fillMaxWidth()
                                 .height(4.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(progress)
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = transferDetails(item),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = transferDetails(item),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${item.progress.coerceIn(0, 100)}%",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    Spacer(Modifier.width(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (item.isBusy) {
+                            RowAction(
+                                label = "Pause",
+                                icon = { Icon(Icons.Rounded.Pause, contentDescription = null) }
+                            ) { onPause(item.id) }
+                        }
+                        RowAction(
+                            label = "Remove",
+                            destructive = true,
+                            icon = {
+                                Icon(
+                                    painterResource(R.drawable.delete),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        ) { onDelete(item.id) }
                     }
                 }
             }
@@ -428,18 +425,12 @@ fun DownloadRow(
                 )
             }
 
-            if (item.status != DownloadStatus.COMPLETED) {
+            if (item.status != DownloadStatus.COMPLETED && !item.isActiveTransfer) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (item.isBusy) {
-                        RowAction(
-                            label = "Pause",
-                            icon = { Icon(Icons.Rounded.Pause, contentDescription = null) }
-                        ) { onPause(item.id) }
-                    }
                     if (item.status == DownloadStatus.FAILED || item.status == DownloadStatus.PAUSED) {
                         RowAction(
                             label = if (item.status == DownloadStatus.PAUSED) "Resume" else "Retry",
@@ -501,11 +492,158 @@ fun DownloadRow(
 }
 
 @Composable
+private fun CompletedActions(
+    item: Download,
+    shareable: Boolean,
+    onRetry: (String) -> Unit,
+    onShare: ((Download) -> Unit)?,
+    onDeleteRequested: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (item.isLegacyTwitterPreview) {
+            RowAction(
+                label = "Retry media extraction",
+                icon = { Icon(Icons.Rounded.Refresh, contentDescription = null) }
+            ) { onRetry(item.id) }
+        }
+        if (shareable) {
+            RowAction(
+                label = "Share",
+                icon = {
+                    Icon(
+                        painterResource(R.drawable.share),
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            ) { onShare?.invoke(item) }
+        }
+        RowAction(
+            label = "Delete file",
+            destructive = true,
+            icon = {
+                Icon(
+                    painterResource(R.drawable.delete),
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+        ) { onDeleteRequested() }
+    }
+}
+
+@Composable
+private fun MediaThumbnail(item: Download) {
+    val context = LocalContext.current
+    val localPreview by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = item.localUri,
+        key2 = item.mediaType,
+        key3 = item.thumbnailUrl
+    ) {
+        value = if (item.thumbnailUrl.isNullOrBlank()) {
+            withContext(Dispatchers.IO) { loadLocalMediaPreview(context, item) }
+        } else {
+            null
+        }
+    }
+    val remoteOrImageModel = item.thumbnailUrl
+        ?: item.localUri?.takeIf { item.mediaType == MediaType.IMAGE }
+
+    Box(
+        modifier = Modifier
+            .size(width = 104.dp, height = 88.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = when (item.mediaType) {
+                MediaType.VIDEO -> Icons.Rounded.Movie
+                MediaType.AUDIO -> Icons.Rounded.MusicNote
+                MediaType.IMAGE -> Icons.Rounded.Photo
+                MediaType.UNKNOWN -> Icons.AutoMirrored.Rounded.InsertDriveFile
+            },
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(25.dp)
+        )
+        when {
+            remoteOrImageModel != null -> AsyncImage(
+                model = remoteOrImageModel,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            localPreview != null -> Image(
+                bitmap = requireNotNull(localPreview).asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
+
+private fun loadLocalMediaPreview(context: Context, item: Download): Bitmap? {
+    val localUri = item.localUri?.let(Uri::parse) ?: return null
+    if (item.mediaType != MediaType.VIDEO && item.mediaType != MediaType.AUDIO) return null
+
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(context, localUri)
+        if (item.mediaType == MediaType.AUDIO) {
+            retriever.embeddedPicture?.let(::decodeArtworkPreview)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            retriever.getScaledFrameAtTime(
+                0,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                416,
+                352
+            )
+        } else {
+            retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?.scaledPreview(416, 352)
+        }
+    } catch (_: Exception) {
+        null
+    } finally {
+        runCatching { retriever.release() }
+    }
+}
+
+private fun decodeArtworkPreview(bytes: ByteArray): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > 416 || bounds.outHeight / sampleSize > 352) {
+        sampleSize *= 2
+    }
+    return BitmapFactory.decodeByteArray(
+        bytes,
+        0,
+        bytes.size,
+        BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    )
+}
+
+private fun Bitmap.scaledPreview(maxWidth: Int, maxHeight: Int): Bitmap {
+    if (width <= maxWidth && height <= maxHeight) return this
+    val scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+    val scaled = Bitmap.createScaledBitmap(
+        this,
+        (width * scale).toInt().coerceAtLeast(1),
+        (height * scale).toInt().coerceAtLeast(1),
+        true
+    )
+    if (scaled !== this) recycle()
+    return scaled
+}
+
+@Composable
 private fun RowAction(
     label: String,
     destructive: Boolean = false,
-    emphasized: Boolean = false,
-    opticalPlayOffset: Boolean = false,
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
@@ -518,15 +656,11 @@ private fun RowAction(
     )
     val containerColor = if (destructive) {
         MaterialTheme.colorScheme.error
-    } else if (emphasized) {
-        MaterialTheme.colorScheme.secondary
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = if (destructive) {
         MaterialTheme.colorScheme.onError
-    } else if (emphasized) {
-        MaterialTheme.colorScheme.onSecondary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -544,7 +678,7 @@ private fun RowAction(
     ) {
         Box(
             Modifier
-                .size(36.dp)
+                .size(34.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -555,8 +689,7 @@ private fun RowAction(
         ) {
             Box(
                 modifier = Modifier
-                    .size(18.dp)
-                    .offset(x = if (opticalPlayOffset) 1.dp else 0.dp),
+                    .size(17.dp),
                 contentAlignment = Alignment.Center
             ) {
                 icon()
