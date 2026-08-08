@@ -23,29 +23,29 @@ No ads. No telemetry. No tracking. MIT licensed.
     <td align="center" width="33%">
       <img src="docs/screenshots/onboarding.png" alt="ClipSave onboarding screen" width="260"><br>
       <strong>Onboarding</strong><br>
-      <sub>A clear introduction to the download flow.</sub>
+      <sub>First-run guidance, download steps, and responsible-use notice.</sub>
     </td>
     <td align="center" width="33%">
       <img src="docs/screenshots/home.png" alt="ClipSave home screen" width="260"><br>
       <strong>Home</strong><br>
-      <sub>At-a-glance activity and recent downloads.</sub>
+      <sub>At-a-glance KPIs and two saved Quran media items.</sub>
     </td>
     <td align="center" width="33%">
       <img src="docs/screenshots/downloads.png" alt="ClipSave downloads manager" width="260"><br>
       <strong>Downloads</strong><br>
-      <sub>Search, filter, retry, play, and manage files.</sub>
+      <sub>Search Quran recitations while tracking live speed, progress, and ETA.</sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="33%">
       <img src="docs/screenshots/new-download.png" alt="ClipSave new download screen" width="260"><br>
       <strong>New download</strong><br>
-      <sub>Paste a link and choose video or audio quality.</sub>
+      <sub>Review a Quran media link and choose video or audio quality.</sub>
     </td>
     <td align="center" width="33%">
       <img src="docs/screenshots/video-player.png" alt="ClipSave in-app video player" width="260"><br>
       <strong>Video player</strong><br>
-      <sub>Clean playback with seeking and skip controls.</sub>
+      <sub>Play saved media in-app with seeking and skip controls.</sub>
     </td>
     <td align="center" width="33%">
       <img src="docs/screenshots/settings.png" alt="ClipSave appearance and app settings" width="260"><br>
@@ -58,7 +58,7 @@ No ads. No telemetry. No tracking. MIT licensed.
 <p align="center">
   <img src="docs/screenshots/share-dialog.png" alt="Share a link directly to ClipSave" width="280"><br>
   <strong>Share from any app</strong><br>
-  <sub>Send a link to ClipSave and choose video or audio without retyping it.</sub>
+  <sub>Send a Quran media link to ClipSave and choose video or audio without retyping it.</sub>
 </p>
 
 ---
