@@ -2,6 +2,7 @@ package com.abdellatif.clipsave.extractor.extractors
 
 import com.abdellatif.clipsave.data.model.MediaType
 import com.abdellatif.clipsave.data.model.Platform
+import com.abdellatif.clipsave.extractor.DirectMediaUrl
 import com.abdellatif.clipsave.extractor.Extractor
 import com.abdellatif.clipsave.extractor.MediaInfo
 import com.abdellatif.clipsave.extractor.MetaScraper
@@ -12,14 +13,15 @@ class GenericExtractor : Extractor {
     override fun canHandle(url: String) = true
 
     override fun extract(url: String): List<MediaInfo> {
-        val direct = Regex(".*\\.(mp4|webm|mkv|mov|jpg|jpeg|png|gif|webp|mp3|m4a|aac|wav|ogg)(\\?.*)?$",
+        DirectMediaUrl.image(url)?.let { return listOf(it) }
+
+        val direct = Regex(".*\\.(mp4|webm|mkv|mov|mp3|m4a|aac|wav|ogg)(\\?.*)?$",
             RegexOption.IGNORE_CASE)
         if (direct.matches(url)) {
             val lower = url.lowercase()
             val type = when {
                 Regex("\\.(mp4|webm|mkv|mov)").containsMatchIn(lower) -> MediaType.VIDEO
-                Regex("\\.(mp3|m4a|aac|wav|ogg)").containsMatchIn(lower) -> MediaType.AUDIO
-                else -> MediaType.IMAGE
+                else -> MediaType.AUDIO
             }
             return listOf(MediaInfo(url, type))
         }

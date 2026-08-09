@@ -292,7 +292,10 @@ fun DownloadRow(
                     Spacer(Modifier.height(5.dp))
                     val size = maxOf(item.totalBytes, item.bytesDownloaded)
                     val meta = buildString {
-                        append(item.mediaType.name.lowercase(Locale.US))
+                        append(
+                            if (item.mediaType == MediaType.UNKNOWN) "media"
+                            else item.mediaType.name.lowercase(Locale.US)
+                        )
                         append(" · ")
                         append(item.format.label)
                         if (size > 0) append(" · ").append(formatBytes(size))

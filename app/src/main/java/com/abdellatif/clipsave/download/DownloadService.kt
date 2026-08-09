@@ -15,7 +15,10 @@ import com.abdellatif.clipsave.data.model.Platform
 import com.abdellatif.clipsave.data.preferences.NetworkPolicy
 import com.abdellatif.clipsave.data.preferences.UserPreferences
 import com.abdellatif.clipsave.data.repository.DownloadRepository
+import com.abdellatif.clipsave.extractor.DirectMediaUrl
 import com.abdellatif.clipsave.extractor.ExtractorRegistry
+import com.abdellatif.clipsave.extractor.ImageDownloadResolver
+import com.abdellatif.clipsave.extractor.MediaInfo
 import com.abdellatif.clipsave.network.HttpClient
 import com.abdellatif.clipsave.network.NetworkMonitor
 import com.abdellatif.clipsave.network.NetworkState
@@ -128,7 +131,7 @@ class DownloadService : Service() {
         pauseRequests.remove(request.id)
         removedIds.remove(request.id)
         val platform = Platform.fromUrl(request.url)
-        val mediaType = if (request.format.isAudio) MediaType.AUDIO else MediaType.VIDEO
+        val mediaType = requestedMediaType(request.url, request.format)
         val queued = repo.get(request.id)?.copy(
             url = request.url,
             platform = platform,
@@ -263,7 +266,7 @@ class DownloadService : Service() {
         val downloadSettings = prefs.settings.first()
         val platform = Platform.fromUrl(request.url)
         val notifId = request.id.hashCode() and 0xFFFF
-        val baseType = if (request.format.isAudio) MediaType.AUDIO else MediaType.VIDEO
+        val baseType = requestedMediaType(request.url, request.format)
         var item = repo.get(request.id)?.copy(
             status = DownloadStatus.EXTRACTING,
             progress = 0,
@@ -277,7 +280,22 @@ class DownloadService : Service() {
         updateForeground(platform.displayName, 0, request.id)
 
         var ytError: String? = null
+        var engineImage: MediaInfo? = null
         try {
+            if (!request.format.isAudio) {
+                val image = ImageDownloadResolver.resolve(request.url, platform)
+                if (image != null) {
+                    try {
+                        downloadResolvedMedia(request, item, image, platform, notifId)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        finishFailure(item.copy(mediaType = MediaType.IMAGE), error.message ?: "Image download failed.", notifId)
+                    }
+                    return
+                }
+            }
+
             val ytOk = try {
                 ensureRunning(request.id)
                 item = item.copy(status = DownloadStatus.DOWNLOADING)
@@ -331,12 +349,38 @@ class DownloadService : Service() {
                 throw cancelled
             } catch (error: Exception) {
                 ytError = error.message
+                engineImage = DirectMediaUrl.imageFromText(
+                    error.message.orEmpty(),
+                    item.title.ifBlank {
+                        if (platform == Platform.REDDIT) "Reddit image" else ""
+                    }
+                )
                 android.util.Log.w("DownloadService", "yt-dlp path failed: ${error.message}")
                 false
             }
 
             if (!ytOk) {
                 ensureRunning(request.id)
+                if (!request.format.isAudio && engineImage != null) {
+                    try {
+                        downloadResolvedMedia(
+                            request,
+                            item,
+                            requireNotNull(engineImage),
+                            platform,
+                            notifId
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        finishFailure(
+                            item.copy(mediaType = MediaType.IMAGE),
+                            error.message ?: "Image download failed.",
+                            notifId
+                        )
+                    }
+                    return
+                }
                 if (request.format.isAudio) {
                     finishFailure(
                         item,
@@ -348,47 +392,7 @@ class DownloadService : Service() {
                         item = item.copy(status = DownloadStatus.EXTRACTING)
                         publish(item)
                         val media = ExtractorRegistry.extract(request.url).first()
-                        ensureRunning(request.id)
-                        item = item.copy(
-                            status = DownloadStatus.DOWNLOADING,
-                            title = media.title.ifBlank { item.title },
-                            mediaType = media.mediaType,
-                            thumbnailUrl = media.thumbnailUrl
-                        )
-                        publish(item)
-                        val temp = downloadToTemp(
-                            request.id,
-                            media.downloadUrl,
-                            media.suggestedExtension ?: extOf(media.mediaType),
-                            media.mediaType
-                        ) { progress ->
-                            item = item.withProgress(progress)
-                            publish(item)
-                            updateForeground(
-                                item.title.ifBlank { platform.displayName },
-                                progress.percent,
-                                request.id
-                            )
-                        }
-                        ensureRunning(request.id)
-                        val savedUri = FileSaver.saveFile(
-                            this,
-                            temp,
-                            item.title.ifBlank { defaultName(platform) },
-                            media.mediaType
-                        )
-                        val savedSize = temp.length()
-                        temp.delete()
-                        finishSuccess(
-                            item.copy(
-                                fileName = temp.name,
-                                bytesDownloaded = savedSize,
-                                totalBytes = savedSize
-                            ),
-                            savedUri,
-                            notifId
-                        )
-                        YtDlpEngine.cleanup(this, request.id)
+                        downloadResolvedMedia(request, item, media, platform, notifId)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
@@ -403,6 +407,60 @@ class DownloadService : Service() {
         } catch (_: CancellationException) {
             // Pause and removal are expected control flow. Their UI state is set by the action.
         }
+    }
+
+    private suspend fun downloadResolvedMedia(
+        request: StartRequest,
+        base: Download,
+        media: MediaInfo,
+        platform: Platform,
+        notifId: Int
+    ) {
+        ensureRunning(request.id)
+        var item = base.copy(
+            status = DownloadStatus.DOWNLOADING,
+            title = media.title.ifBlank { base.title },
+            mediaType = media.mediaType,
+            thumbnailUrl = media.thumbnailUrl ?: media.downloadUrl.takeIf {
+                media.mediaType == MediaType.IMAGE
+            }
+        )
+        publish(item)
+        val temp = downloadToTemp(
+            request.id,
+            media.downloadUrl,
+            media.suggestedExtension ?: extOf(media.mediaType),
+            media.mediaType
+        ) { progress ->
+            item = item.withProgress(progress)
+            publish(item)
+            updateForeground(
+                item.title.ifBlank { platform.displayName },
+                progress.percent,
+                request.id
+            )
+        }
+        ensureRunning(request.id)
+        val displayTitle = item.title.ifBlank { defaultName(platform) }
+        val savedFileName = FileSaver.safeDisplayName(displayTitle, temp.extension)
+        val savedUri = FileSaver.saveFile(
+            this,
+            temp,
+            displayTitle,
+            media.mediaType
+        )
+        val savedSize = temp.length()
+        temp.delete()
+        finishSuccess(
+            item.copy(
+                fileName = savedFileName,
+                bytesDownloaded = savedSize,
+                totalBytes = savedSize
+            ),
+            savedUri,
+            notifId
+        )
+        YtDlpEngine.cleanup(this, request.id)
     }
 
     private suspend fun downloadToTemp(
@@ -653,6 +711,12 @@ class DownloadService : Service() {
         "mp3", "m4a", "aac", "wav", "ogg", "opus" -> MediaType.AUDIO
         "jpg", "jpeg", "png", "gif", "webp" -> MediaType.IMAGE
         else -> MediaType.VIDEO
+    }
+
+    private fun requestedMediaType(url: String, format: DownloadFormat): MediaType = when {
+        format.isAudio -> MediaType.AUDIO
+        DirectMediaUrl.isImage(url) -> MediaType.IMAGE
+        else -> MediaType.UNKNOWN
     }
 
     private fun extOf(type: MediaType) = when (type) {

@@ -45,6 +45,12 @@ object MediaPayloadValidator {
         if (mediaType == MediaType.VIDEO && declaredType.startsWith("image/")) {
             throw IllegalStateException("The server returned an image instead of a video.")
         }
+        if (
+            mediaType == MediaType.IMAGE && declaredType.isNotBlank() &&
+            !declaredType.startsWith("image/")
+        ) {
+            throw IllegalStateException("The server returned a non-image file.")
+        }
 
         val ext = file.extension.lowercase()
         val hasExpectedContainer = when (ext) {
@@ -59,6 +65,23 @@ object MediaPayloadValidator {
         }
         if (mediaType == MediaType.VIDEO && !hasExpectedContainer) {
             throw IllegalStateException("The downloaded file is not a valid ${ext.ifBlank { "video" }} file.")
+        }
+
+        val hasExpectedImage = when (ext) {
+            "jpg", "jpeg" -> header.take(3).map { it.toInt() and 0xFF } ==
+                listOf(0xFF, 0xD8, 0xFF)
+            "png" -> header.take(8).map { it.toInt() and 0xFF } ==
+                listOf(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+            "gif" -> textHeader.startsWith("gif87a") || textHeader.startsWith("gif89a")
+            "webp" -> header.size >= 12 &&
+                String(header, 0, 4, StandardCharsets.US_ASCII) == "RIFF" &&
+                String(header, 8, 4, StandardCharsets.US_ASCII) == "WEBP"
+            "avif", "heic", "heif" -> header.size >= 12 &&
+                String(header, 4, 4, StandardCharsets.US_ASCII) == "ftyp"
+            else -> true
+        }
+        if (mediaType == MediaType.IMAGE && !hasExpectedImage) {
+            throw IllegalStateException("The downloaded file is not a valid ${ext.ifBlank { "image" }} file.")
         }
     }
 }
