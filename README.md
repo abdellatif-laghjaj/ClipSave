@@ -4,9 +4,9 @@
 
 <p align="center">
   <a href="https://github.com/abdellatif-laghjaj/ClipSave/releases/latest"><img alt="Latest release" src="https://shieldcn.dev/github/release/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
-  <a href="https://github.com/abdellatif-laghjaj/ClipSave/releases"><img alt="Release downloads" src="https://shieldcn.dev/github/dt/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/releases"><img alt="Release downloads" src="https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fimg.shields.io%2Fgithub%2Fdownloads%2Fabdellatif-laghjaj%2FClipSave%2Ftotal.json&query=%24.message&label=downloads&logo=ri%3ADownloadLine&variant=secondary&theme=violet&font=geist&mode=dark"></a>
   <a href="https://github.com/abdellatif-laghjaj/ClipSave/stargazers"><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
-  <a href="https://github.com/abdellatif-laghjaj/ClipSave/actions/workflows/android.yml"><img alt="CI status" src="https://shieldcn.dev/github/ci/abdellatif-laghjaj/ClipSave.svg?workflow=ClipSave%20CI&branch=main&variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/actions/workflows/android.yml"><img alt="CI status" src="https://shieldcn.dev/github/ci/abdellatif-laghjaj/ClipSave.svg?workflow=android.yml&branch=main&variant=secondary&theme=violet&font=geist&mode=dark"></a>
   <a href="https://developer.android.com/about/versions/oreo"><img alt="Android 8.0 and newer" src="https://shieldcn.dev/badge/Android-8.0%2B-3DDC84.svg?variant=secondary&logo=android&font=geist&mode=dark"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://shieldcn.dev/github/license/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
 </p>
