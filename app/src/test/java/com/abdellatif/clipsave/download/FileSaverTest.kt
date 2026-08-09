@@ -36,5 +36,7 @@ class FileSaverTest {
         assertEquals("audio/mp4", FileSaver.mimeFor(MediaType.AUDIO, ".m4a"))
         assertEquals("audio/mpeg", FileSaver.mimeFor(MediaType.AUDIO, "mp3"))
         assertEquals("image/webp", FileSaver.mimeFor(MediaType.IMAGE, "webp"))
+        assertEquals("image/avif", FileSaver.mimeFor(MediaType.IMAGE, "avif"))
+        assertEquals("image/heic", FileSaver.mimeFor(MediaType.IMAGE, "heic"))
     }
 }
