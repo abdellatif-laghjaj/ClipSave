@@ -1,18 +1,26 @@
+<p align="center">
+  <img src="docs/assets/clipsave-cover.png" alt="ClipSave — your media, ready offline" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/releases/latest"><img alt="Latest release" src="https://shieldcn.dev/github/release/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/releases"><img alt="Release downloads" src="https://shieldcn.dev/github/dt/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/stargazers"><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://github.com/abdellatif-laghjaj/ClipSave/actions/workflows/android.yml"><img alt="CI status" src="https://shieldcn.dev/github/ci/abdellatif-laghjaj/ClipSave.svg?workflow=ClipSave%20CI&branch=main&variant=secondary&theme=violet&font=geist&mode=dark"></a>
+  <a href="https://developer.android.com/about/versions/oreo"><img alt="Android 8.0 and newer" src="https://shieldcn.dev/badge/Android-8.0%2B-3DDC84.svg?variant=secondary&logo=android&font=geist&mode=dark"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://shieldcn.dev/github/license/abdellatif-laghjaj/ClipSave.svg?variant=secondary&theme=violet&font=geist&mode=dark"></a>
+</p>
+
+<p align="center">
+  <strong>Free, open-source media downloader for Android.</strong><br>
+  Save images, video, and audio from 1000+ websites. No ads, telemetry, or tracking.
+</p>
+
 [![Stand With Palestine](https://raw.githubusercontent.com/TheBSD/StandWithPalestine/main/banner-no-action.svg)](https://thebsd.github.io/StandWithPalestine)
 
-# ClipSave
-
-![GitHub Downloads](https://img.shields.io/github/downloads/abdellatif-laghjaj/android-all-in-one-video-downloader/total.svg)
-![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-black)
-
-**Free, open-source media downloader for Android.** Grab images, video, and audio from
-1000+ websites — YouTube, Instagram, TikTok, X/Twitter, Reddit, Facebook, Pinterest,
-Twitch, Vimeo, SoundCloud, Bilibili, and many more — straight to
+ClipSave supports YouTube, Instagram, TikTok, X/Twitter, Reddit, Facebook, Pinterest,
+Twitch, Vimeo, SoundCloud, Bilibili, and many more. Downloads are saved directly to
 `/storage/emulated/0/Download/ClipSave/`.
-
-No ads. No telemetry. No tracking. MIT licensed.
 
 ---
 
