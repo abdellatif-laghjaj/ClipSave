@@ -8,6 +8,9 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.abdellatif.clipsave.data.model.DownloadFormat
 import com.abdellatif.clipsave.data.model.PlaylistPreview
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.Locale
 
@@ -29,9 +32,8 @@ object YtDlpEngine {
     @Volatile
     var lastInitError: String? = null
         private set
-    @Volatile
-    var ytdlpVersion: String? = null
-        private set
+    private val _ytdlpVersion = MutableStateFlow<String?>(null)
+    val ytdlpVersion: StateFlow<String?> = _ytdlpVersion.asStateFlow()
     private val executionLock = Any()
     private var activeExecutions = 0
 
@@ -47,7 +49,7 @@ object YtDlpEngine {
                 }.isSuccess
                 initialized = true
                 lastInitError = null
-                ytdlpVersion = runCatching {
+                _ytdlpVersion.value = runCatching {
                     YoutubeDL.getInstance().version(context.applicationContext)
                 }.getOrNull()
                 true
@@ -63,22 +65,22 @@ object YtDlpEngine {
     @Synchronized
     fun update(context: Context, force: Boolean = false): String {
         if (!ensureInit(context)) return "Engine not available: ${lastInitError ?: "init failed"}"
-        if (updated && !force) return "Already updated this session (yt-dlp ${ytdlpVersion ?: "?"})"
+        if (updated && !force) return "Already updated this session (yt-dlp ${_ytdlpVersion.value ?: "?"})"
         if (!force && !EngineUpdatePolicy.shouldRefresh(context)) {
             updated = true
-            return "Checked within the last 24 hours (yt-dlp ${ytdlpVersion ?: "?"})"
+            return "Checked within the last 24 hours (yt-dlp ${_ytdlpVersion.value ?: "?"})"
         }
         return try {
             val status = YoutubeDL.getInstance()
                 .updateYoutubeDL(context.applicationContext, YoutubeDL.UpdateChannel.STABLE)
             updated = true
             EngineUpdatePolicy.recordSuccess(context)
-            ytdlpVersion = runCatching {
+            _ytdlpVersion.value = runCatching {
                 YoutubeDL.getInstance().version(context.applicationContext)
             }.getOrNull()
             when (status) {
-                YoutubeDL.UpdateStatus.DONE -> "Updated to yt-dlp ${ytdlpVersion ?: "latest"}"
-                YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "Already up to date (yt-dlp ${ytdlpVersion ?: "?"})"
+                YoutubeDL.UpdateStatus.DONE -> "Updated to yt-dlp ${_ytdlpVersion.value ?: "latest"}"
+                YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "Already up to date (yt-dlp ${_ytdlpVersion.value ?: "?"})"
                 else -> "Update finished"
             }
         } catch (t: Throwable) {

@@ -74,6 +74,7 @@ fun SettingsScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
     val cookieStatus by vm.cookieStatus.collectAsStateWithLifecycle()
+    val ytdlpVersion by YtDlpEngine.ytdlpVersion.collectAsStateWithLifecycle()
     val cookiePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -219,7 +220,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "Version · ${YtDlpEngine.ytdlpVersion ?: "initializing…"}",
+                "Version · ${ytdlpVersion ?: "initializing…"}",
                 style = MaterialTheme.typography.bodySmall
             )
             PillButton(
