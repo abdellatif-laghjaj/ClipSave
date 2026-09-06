@@ -13,8 +13,8 @@ android {
         applicationId = "com.abdellatif.clipsave"
         minSdk = 26
         targetSdk = 36
-        versionCode = 108
-        versionName = "2.4.0"
+        versionCode = 109
+        versionName = "2.4.1"
         vectorDrawables { useSupportLibrary = true }
     }
 
